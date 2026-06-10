@@ -2,14 +2,14 @@ import { redirect } from "next/navigation";
 import { DemoControls } from "@/components/demo/demo-controls";
 import { SideNav } from "@/components/layout/side-nav";
 import { TopNav } from "@/components/layout/top-nav";
-import { getSession } from "@/lib/auth";
+import { readSession } from "@/lib/auth";
 
 export default async function AppLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await getSession();
+  const session = await readSession();
   if (!session) {
     redirect("/auth/login");
   }

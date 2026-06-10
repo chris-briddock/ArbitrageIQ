@@ -133,8 +133,35 @@ export async function clearSessionCookies(): Promise<void> {
 }
 
 /**
+ * Read-only session check safe to call from Server Components and layouts.
+ * Does NOT write cookies — returns claims from the refresh token when the
+ * access token has expired, without re-issuing a new JWT.
+ * Use getSession() from Route Handlers when auto-refresh is desired.
+ */
+export async function readSession(): Promise<SessionClaims | null> {
+  const store = await cookies();
+
+  const jwt = store.get(JWT_COOKIE)?.value;
+  if (jwt) {
+    const claims = decodeToken(jwt);
+    if (claims) {
+      return claims;
+    }
+  }
+
+  const refresh = store.get(REFRESH_COOKIE)?.value;
+  if (!refresh) {
+    return null;
+  }
+
+  return decodeToken(refresh);
+}
+
+/**
  * Returns the verified session claims, transparently re-issuing the access
  * token from the refresh token when the access token has expired.
+ * Must only be called from Route Handlers or Server Actions — not Server
+ * Components — because it writes a cookie on silent refresh.
  */
 export async function getSession(): Promise<SessionClaims | null> {
   const store = await cookies();
