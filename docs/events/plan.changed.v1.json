@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/plan.changed.v1.json",
+  "title": "plan.changed (v1)",
+  "description": "Published by the Billing Service when a Stripe webhook fires a subscription update. API Gateway refreshes the entitlement cache. See TDD Sections 3.2.1, 5.2, 8.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "plan.changed" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "billing-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["user_id", "old_plan_id", "new_plan_id", "change_reason"],
+      "additionalProperties": false,
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid", "description": "The user whose plan changed." },
+        "old_plan_id": {
+          "type": "string",
+          "enum": ["starter", "pro", "business"],
+          "description": "The previous subscription plan."
+        },
+        "new_plan_id": {
+          "type": "string",
+          "enum": ["starter", "pro", "business"],
+          "description": "The new subscription plan."
+        },
+        "change_reason": {
+          "type": "string",
+          "enum": ["upgrade", "downgrade", "cancellation", "trial_expired", "payment_failed", "admin_override"],
+          "description": "The reason for the plan change."
+        },
+        "changed_at": { "type": "string", "format": "date-time", "description": "Timestamp when the plan change took effect." },
+        "stripe_subscription_id": { "type": "string", "description": "Stripe subscription ID for audit correlation." }
+      }
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/session.revoked.v1.json",
+  "title": "session.revoked (v1)",
+  "description": "Published by the Identity Service when a user signs out all sessions or an admin forces logout. API Gateway invalidates the Redis session cache. See TDD Sections 3.2.1, 5.7.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "session.revoked" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "identity-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["user_id", "session_id", "revoked_at", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid", "description": "The user whose session was revoked." },
+        "session_id": { "type": "string", "description": "The specific session identifier. 'all' indicates all sessions were revoked." },
+        "revoked_at": { "type": "string", "format": "date-time", "description": "Timestamp when the session was revoked." },
+        "reason": {
+          "type": "string",
+          "enum": ["user_signout", "user_signout_all", "admin_forced", "mfa_reset", "security_breach"],
+          "description": "The reason the session was revoked."
+        }
+      }
+    }
+  }
+}

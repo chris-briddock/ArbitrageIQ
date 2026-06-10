@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/deal.purchased.v1.json",
+  "title": "deal.purchased (v1)",
+  "description": "Published by the Approvals Service when the purchase API call succeeds. Triggers the listing workflow asynchronously. See TDD Sections 3.2.1, 5.4, 5.5, 6.3.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "deal.purchased" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "approvals-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["approval_id", "user_id", "actual_buy_price_gbp", "order_reference"],
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": { "type": "string", "format": "uuid", "description": "The approval record that authorised this purchase." },
+        "user_id": { "type": "string", "format": "uuid", "description": "The user who owns the deal." },
+        "sku_title": { "type": "string", "description": "Human-readable product title for webhook consumers." },
+        "buy_retailer": { "type": "string", "description": "Retailer where the purchase was made." },
+        "actual_buy_price_gbp": { "type": "number", "minimum": 0, "description": "The actual price paid at checkout, which may differ from the surfaced price." },
+        "quantity": { "type": "integer", "minimum": 1, "description": "Number of units purchased." },
+        "purchased_at": { "type": "string", "format": "date-time", "description": "Timestamp when the purchase completed." },
+        "order_reference": { "type": "string", "description": "Retailer order reference for tracking and support." }
+      }
+    }
+  }
+}

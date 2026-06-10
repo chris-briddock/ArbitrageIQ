@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/catalogue.scored.v1.json",
+  "title": "catalogue.scored (v1)",
+  "description": "Published by the Catalogue Service when the nightly scoring job completes. Carries aggregate scoring statistics. See TDD Sections 3.2.1, 5.6.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "catalogue.scored" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "catalogue-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["run_id", "sku_count", "high_opportunity_count"],
+      "additionalProperties": false,
+      "properties": {
+        "run_id": { "type": "string", "format": "uuid", "description": "Unique identifier for this scoring run." },
+        "sku_count": { "type": "integer", "minimum": 0, "description": "Total number of SKUs scored in this run." },
+        "high_opportunity_count": { "type": "integer", "minimum": 0, "description": "Number of SKUs that qualified as high opportunity." },
+        "duration_ms": { "type": "integer", "minimum": 0, "description": "Wall-clock duration of the scoring run in milliseconds." },
+        "triggered_at": { "type": "string", "format": "date-time", "description": "Scheduled time that triggered this run." }
+      }
+    }
+  }
+}

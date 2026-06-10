@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/job.failed.v1.json",
+  "title": "job.failed (v1)",
+  "description": "Published by the Jobs Service when a job fails after max retries. Consumed by all services for alerting. See TDD Sections 3.2.1, 5.2.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "job.failed" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "jobs-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["job_id", "last_error", "retry_count"],
+      "additionalProperties": false,
+      "properties": {
+        "job_id": { "type": "string", "description": "Hangfire job identifier." },
+        "last_error": { "type": "string", "description": "The error message from the final failed attempt." },
+        "retry_count": { "type": "integer", "minimum": 1, "description": "Total number of attempts before final failure." },
+        "failed_at": { "type": "string", "format": "date-time", "description": "Timestamp when the final failure occurred." },
+        "job_type": {
+          "type": "string",
+          "enum": ["price_ingestion", "nightly_scoring", "circuit_probing", "quarantine_replay", "retention_purge", "webhook_delivery"],
+          "description": "The category of job that failed."
+        }
+      }
+    }
+  }
+}

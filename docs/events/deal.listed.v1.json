@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/deal.listed.v1.json",
+  "title": "deal.listed (v1)",
+  "description": "Published by the Approvals Service when all listing calls succeed, or partially succeeds with some failed channels. See TDD Sections 3.2.1, 5.4, 5.5.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "deal.listed" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "approvals-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["approval_id", "user_id", "sell_channel"],
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": { "type": "string", "format": "uuid", "description": "The approval record that triggered the listing." },
+        "user_id": { "type": "string", "format": "uuid", "description": "The user who owns the deal." },
+        "sell_channel": {
+          "type": "string",
+          "enum": ["amazon_fba", "amazon_fbm", "ebay", "shopify", "facebook", "gumtree"],
+          "description": "The primary sell channel where the item was listed."
+        },
+        "failed_channels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["amazon_fba", "amazon_fbm", "ebay", "shopify", "facebook", "gumtree"]
+          },
+          "description": "Channels where listing failed. Empty when all succeed. User must list manually on these channels."
+        },
+        "listing_id": { "type": "string", "description": "Identifier for the successful listing on the sell channel." },
+        "listed_at": { "type": "string", "format": "date-time", "description": "Timestamp when the listing went live." }
+      }
+    }
+  }
+}

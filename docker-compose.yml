@@ -1,0 +1,94 @@
+# Local development environment for ArbitrageIQ (TDD Section 8.7).
+#
+# Quick start:
+#   docker compose --profile infra up -d        # PostgreSQL/TimescaleDB, Redis, Aspire Dashboard
+#   docker compose run --rm migrations          # apply Flyway migrations
+#   docker compose run --rm seed                # apply dev seed data
+#
+# Service containers (Ingestion, Opportunity Engine, ...) are added to their profiles as their
+# Dockerfiles are introduced. The infra profile is the shared baseline and must start first.
+
+services:
+  postgres:
+    # TimescaleDB is required for the catalogue hypertables and continuous aggregates (TDD 4.2).
+    image: timescale/timescaledb:latest-pg16
+    profiles: ["infra"]
+    environment:
+      POSTGRES_USER: arbitrageiq
+      POSTGRES_PASSWORD: arbitrageiq
+      POSTGRES_DB: arbitrageiq
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arbitrageiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["infra"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Next.js frontend in mock-gateway demo mode: `docker compose --profile frontend up web`.
+  # Point it at a real gateway with GATEWAY_MODE=real + API_GATEWAY_URL.
+  web:
+    build: ./src/demo
+    profiles: ["frontend"]
+    ports:
+      - "3000:3000"
+    environment:
+      GATEWAY_MODE: ${GATEWAY_MODE:-mock}
+      API_GATEWAY_URL: ${API_GATEWAY_URL:-}
+      SESSION_SECRET: ${SESSION_SECRET:-arbiq-compose-dev-secret}
+
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:10.0
+    profiles: ["infra"]
+    ports:
+      - "18888:18888"
+    environment:
+      - DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true
+
+  # On-demand migration runner: `docker compose run --rm migrations`.
+  migrations:
+    image: flyway/flyway:11
+    profiles: ["tools"]
+    command: -connectRetries=30 -baselineOnMigrate=true migrate
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/arbitrageiq
+      FLYWAY_USER: arbitrageiq
+      FLYWAY_PASSWORD: arbitrageiq
+    volumes:
+      - ./db/migrations:/flyway/sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # On-demand dev seed runner: `docker compose run --rm seed`.
+  seed:
+    image: postgres:16-alpine
+    profiles: ["tools"]
+    entrypoint:
+      - sh
+      - -c
+      - "PGPASSWORD=arbitrageiq psql -h postgres -U arbitrageiq -d arbitrageiq -v ON_ERROR_STOP=1 -f /seed/dev_seed.sql"
+    volumes:
+      - ./db/seed:/seed:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

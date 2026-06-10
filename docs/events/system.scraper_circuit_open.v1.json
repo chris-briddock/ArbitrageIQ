@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/system.scraper_circuit_open.v1.json",
+  "title": "system.scraper_circuit_open (v1)",
+  "description": "Published by the Ingestion Service when the circuit breaker threshold is breached for a retailer. Affected scan jobs are suspended; users are notified. See TDD Sections 3.2.1, 5.2.2, 5.2.3.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "system.scraper_circuit_open" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "ingestion-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["retailer", "failure_rate", "threshold_breached_at"],
+      "additionalProperties": false,
+      "properties": {
+        "retailer": { "type": "string", "description": "The retailer whose scraper circuit has opened." },
+        "failure_rate": { "type": "number", "minimum": 0, "maximum": 1, "description": "Observed failure rate that triggered the circuit open (0.0–1.0)." },
+        "threshold_breached_at": { "type": "string", "format": "date-time", "description": "Timestamp when the failure threshold was breached." },
+        "failure_threshold": { "type": "number", "minimum": 0, "maximum": 1, "description": "Configured failure rate threshold (e.g. 0.5 for 50%)." },
+        "affected_scan_job_count": { "type": "integer", "minimum": 0, "description": "Number of user scan jobs suspended by this circuit event." },
+        "recovery_probe_interval_minutes": { "type": "integer", "minimum": 1, "description": "Minutes until the next recovery probe attempt." }
+      }
+    }
+  }
+}

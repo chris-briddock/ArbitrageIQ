@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/user.mfa_enrolled.v1.json",
+  "title": "user.mfa_enrolled (v1)",
+  "description": "Published by the Identity Service when TOTP or email OTP enrolment completes. Notification Service sends a confirmation. See TDD Sections 3.2.1, 5.7.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "user.mfa_enrolled" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "identity-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["user_id", "mfa_type", "enrolled_at"],
+      "additionalProperties": false,
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid", "description": "The user who enrolled in MFA." },
+        "mfa_type": {
+          "type": "string",
+          "enum": ["totp", "email_otp"],
+          "description": "The MFA method enrolled."
+        },
+        "enrolled_at": { "type": "string", "format": "date-time", "description": "Timestamp when MFA enrolment completed." }
+      }
+    }
+  }
+}

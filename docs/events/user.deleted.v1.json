@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/user.deleted.v1.json",
+  "title": "user.deleted (v1)",
+  "description": "Published by the Identity Service when the GDPR erasure endpoint is executed. History Service anonymises records; Catalogue Service purges watchlist; Billing Service cancels the subscription. See TDD Sections 3.2.1, 5.7, 8.6.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "user.deleted" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "identity-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["user_id", "anonymised_user_token", "deleted_at"],
+      "additionalProperties": false,
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid", "description": "The user being deleted. This ID becomes invalid after deletion." },
+        "anonymised_user_token": { "type": "string", "description": "Token replacing the user ID in historical records for GDPR compliance." },
+        "deleted_at": { "type": "string", "format": "date-time", "description": "Timestamp when the erasure was executed." },
+        "deletion_reason": {
+          "type": "string",
+          "enum": ["user_requested", "admin_forced", "inactive_timeout"],
+          "description": "The reason for account deletion."
+        }
+      }
+    }
+  }
+}

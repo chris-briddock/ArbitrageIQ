@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/user.created.v1.json",
+  "title": "user.created (v1)",
+  "description": "Published by the Identity Service when registration completes and email is verified. Notification Service sends a welcome email; Billing Service enrols the free trial. See TDD Sections 3.2.1, 5.7.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "user.created" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "identity-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["user_id", "email", "plan_id", "created_at"],
+      "additionalProperties": false,
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid", "description": "The newly registered user's unique identifier." },
+        "email": { "type": "string", "format": "email", "description": "The user's verified email address." },
+        "plan_id": {
+          "type": "string",
+          "enum": ["starter", "pro", "business"],
+          "description": "The initial subscription plan assigned at registration."
+        },
+        "created_at": { "type": "string", "format": "date-time", "description": "Timestamp when the account was created." }
+      }
+    }
+  }
+}

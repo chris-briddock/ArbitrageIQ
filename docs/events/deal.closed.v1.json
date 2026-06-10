@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/deal.closed.v1.json",
+  "title": "deal.closed (v1)",
+  "description": "Published by the Approvals Service when a user marks a deal as sold or it is auto-detected as sold. History Service writes the final immutable record; Catalogue Service updates the SKU composite score. See TDD Sections 3.2.1, 5.4, 5.7.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "deal.closed" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "approvals-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["approval_id", "user_id", "actual_sell_price_gbp", "net_profit_gbp"],
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": { "type": "string", "format": "uuid", "description": "The original approval record for the deal." },
+        "user_id": { "type": "string", "format": "uuid", "description": "The user who closed the deal." },
+        "actual_sell_price_gbp": { "type": "number", "minimum": 0, "description": "The final sale price received on the sell channel." },
+        "net_profit_gbp": { "type": "number", "description": "Final net profit after all fees, shipping, and VAT adjustments." },
+        "closed_at": { "type": "string", "format": "date-time", "description": "Timestamp when the deal was closed." },
+        "close_reason": {
+          "type": "string",
+          "enum": ["user_marked_sold", "auto_detected_sale", "user_cancelled"],
+          "description": "How the deal was closed."
+        }
+      }
+    }
+  }
+}

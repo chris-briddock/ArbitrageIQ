@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/price.ingested.v1.json",
+  "title": "price.ingested (v1)",
+  "description": "Published by the Ingestion Service once a raw price has been normalised and validated. See TDD Section 3.2.1.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "price.ingested" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "ingestion-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["sku_id", "retailer_source_id", "price_gbp", "delivery_gbp", "in_stock", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "sku_id": { "type": "string", "format": "uuid" },
+        "retailer_source_id": { "type": "string", "format": "uuid" },
+        "price_gbp": { "type": "number", "minimum": 0.01, "maximum": 10000 },
+        "delivery_gbp": { "type": "number", "minimum": 0 },
+        "in_stock": { "type": "boolean" },
+        "source": { "type": "string", "enum": ["api", "scraper", "aggregator"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/deal.surfaced.v1.json",
+  "title": "deal.surfaced (v1)",
+  "description": "Published by the Opportunity Engine when net margin meets or exceeds the user threshold. Carries the full margin breakdown. See TDD Sections 3.2.1, 5.3.2, 6.3.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "deal.surfaced" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "opportunity-engine" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["deal_id", "user_id", "sku", "buy", "sell", "margin", "surfaced_at"],
+      "additionalProperties": false,
+      "properties": {
+        "deal_id": { "type": "string", "format": "uuid" },
+        "user_id": { "type": "string", "format": "uuid" },
+        "sku": {
+          "type": "object",
+          "required": ["id", "title"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string", "format": "uuid" },
+            "title": { "type": "string" },
+            "composite_score": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+            "high_opportunity": { "type": "boolean" }
+          }
+        },
+        "buy": {
+          "type": "object",
+          "required": ["retailer", "price_gbp", "delivery_gbp"],
+          "additionalProperties": false,
+          "properties": {
+            "retailer": { "type": "string" },
+            "price_gbp": { "type": "number", "minimum": 0 },
+            "delivery_gbp": { "type": "number", "minimum": 0 }
+          }
+        },
+        "sell": {
+          "type": "object",
+          "required": ["channel", "price_gbp"],
+          "additionalProperties": false,
+          "properties": {
+            "channel": {
+              "type": "string",
+              "enum": ["amazon_fba", "amazon_fbm", "ebay", "shopify", "facebook", "gumtree"]
+            },
+            "price_gbp": { "type": "number", "minimum": 0 }
+          }
+        },
+        "margin": {
+          "type": "object",
+          "required": ["net_profit_gbp", "net_margin_pct", "referral_fee_gbp", "fulfilment_fee_gbp", "vat_adjustment_gbp"],
+          "additionalProperties": false,
+          "properties": {
+            "net_profit_gbp": { "type": "number" },
+            "net_margin_pct": { "type": "number" },
+            "referral_fee_gbp": { "type": "number" },
+            "fulfilment_fee_gbp": { "type": "number" },
+            "vat_adjustment_gbp": { "type": "number" }
+          }
+        },
+        "surfaced_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

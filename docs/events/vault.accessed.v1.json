@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/vault.accessed.v1.json",
+  "title": "vault.accessed (v1)",
+  "description": "Published by the Credential Vault Service when a token is retrieved by the Approvals Service for automated purchase or listing. Recorded in the audit log only. See TDD Sections 3.2.1, 5.5.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "vault.accessed" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "credential-vault-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["user_id", "sell_channel", "requesting_service", "accessed_at"],
+      "additionalProperties": false,
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid", "description": "The user whose stored credential was accessed." },
+        "sell_channel": {
+          "type": "string",
+          "enum": ["amazon_fba", "amazon_fbm", "ebay", "shopify", "facebook", "gumtree"],
+          "description": "The sell channel whose token was retrieved."
+        },
+        "requesting_service": { "type": "string", "description": "The service that requested the token (e.g. 'approvals-service')." },
+        "accessed_at": { "type": "string", "format": "date-time", "description": "Timestamp when the token was accessed." },
+        "approval_id": { "type": "string", "format": "uuid", "description": "The approval that triggered this access, if applicable." }
+      }
+    }
+  }
+}

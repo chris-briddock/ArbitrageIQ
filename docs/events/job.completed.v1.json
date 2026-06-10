@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/job.completed.v1.json",
+  "title": "job.completed (v1)",
+  "description": "Published by the Jobs Service when a Hangfire job finishes successfully. Consumed by all services for observability. See TDD Sections 3.2.1, 5.2.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "job.completed" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "jobs-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["job_id", "completed_at", "duration_ms"],
+      "additionalProperties": false,
+      "properties": {
+        "job_id": { "type": "string", "description": "Hangfire job identifier." },
+        "completed_at": { "type": "string", "format": "date-time", "description": "Timestamp when the job completed." },
+        "duration_ms": { "type": "integer", "minimum": 0, "description": "Wall-clock duration of the job in milliseconds." },
+        "result_summary": { "type": "string", "description": "Optional human-readable summary of the job result." }
+      }
+    }
+  }
+}

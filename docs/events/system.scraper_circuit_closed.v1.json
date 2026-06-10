@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/system.scraper_circuit_closed.v1.json",
+  "title": "system.scraper_circuit_closed (v1)",
+  "description": "Published by the Ingestion Service when a circuit breaker recovers after a successful probe. Suspended scan jobs are automatically resumed; users are notified. See TDD Sections 3.2.1, 5.2.2.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "system.scraper_circuit_closed" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "ingestion-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["retailer", "circuit_closed_at", "downtime_minutes"],
+      "additionalProperties": false,
+      "properties": {
+        "retailer": { "type": "string", "description": "The retailer whose scraper circuit has closed (recovered)." },
+        "circuit_closed_at": { "type": "string", "format": "date-time", "description": "Timestamp when the circuit closed (recovery confirmed)." },
+        "downtime_minutes": { "type": "integer", "minimum": 0, "description": "Total minutes the circuit was open." },
+        "resumed_scan_job_count": { "type": "integer", "minimum": 0, "description": "Number of user scan jobs automatically resumed." },
+        "probe_success_at": { "type": "string", "format": "date-time", "description": "Timestamp of the successful recovery probe request." }
+      }
+    }
+  }
+}

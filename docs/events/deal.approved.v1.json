@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/deal.approved.v1.json",
+  "title": "deal.approved (v1)",
+  "description": "Published by the Approvals Service when a user approves a queued deal and the margin re-check passes. See TDD Sections 3.2.1, 5.4, 6.3.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "deal.approved" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "approvals-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["approval_id", "user_id", "sku_id", "pre_execute_margin_pct"],
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": { "type": "string", "format": "uuid", "description": "Unique identifier for the approval record." },
+        "user_id": { "type": "string", "format": "uuid", "description": "The user who approved the deal." },
+        "sku_id": { "type": "string", "format": "uuid", "description": "The SKU being approved for purchase." },
+        "pre_execute_margin_pct": { "type": "number", "description": "Net margin percentage at the time of approval, after the freshness re-check." }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.arbitrageiq.com/events/deal.failed.v1.json",
+  "title": "deal.failed (v1)",
+  "description": "Published by the Approvals Service when a purchase or listing fails irrecoverably. The user is notified immediately. See TDD Sections 3.2.1, 5.4, 5.5.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "timestamp",
+    "source_service",
+    "correlation_id",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "deal.failed" },
+    "schema_version": { "const": "1.0" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source_service": { "const": "approvals-service" },
+    "correlation_id": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "required": ["approval_id", "user_id", "failure_reason"],
+      "additionalProperties": false,
+      "properties": {
+        "approval_id": { "type": "string", "format": "uuid", "description": "The approval record that failed." },
+        "user_id": { "type": "string", "format": "uuid", "description": "The user who owns the failed deal." },
+        "failure_reason": {
+          "type": "string",
+          "enum": ["out_of_stock", "payment_declined", "listing_failed", "channel_token_expired", "margin_drift", "circuit_open", "unknown"],
+          "description": "Categorised reason for the failure."
+        },
+        "failed_at": { "type": "string", "format": "date-time", "description": "Timestamp when the failure occurred." },
+        "retry_eligible": { "type": "boolean", "description": "Whether the deal can be retried via the execution log." }
+      }
+    }
+  }
+}
