@@ -196,7 +196,7 @@ jobs:
       # Trust:   refs/heads/main (build/deploy) or environment:production
       #          (infra — environment-gated jobs get an environment sub claim)
       #          + pipeline.yml
-      # Policy:  scoped inline policy (no AdministratorAccess)
+      # Policy:  ReadOnlyAccess + scoped inline write policy (no AdministratorAccess)
 
       - name: Create Deploy role (idempotent)
         id: deploy-role
@@ -245,6 +245,14 @@ jobs:
               --query Role.Arn --output text)
             echo "Deploy role created."
           fi
+
+          # ReadOnlyAccess ends the recurring AccessDenied failures on the
+          # many Describe/List/Get calls the AWS provider makes during plan,
+          # refresh, and resource creation. Write access stays limited to the
+          # scoped inline policy below.
+          aws iam attach-role-policy \
+            --role-name "$ROLE_NAME_DEPLOY" \
+            --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess || true
 
           # Scoped inline policy replacing the previous AdministratorAccess.
           # Covers only the AWS services used by infra and demo CI/CD.
