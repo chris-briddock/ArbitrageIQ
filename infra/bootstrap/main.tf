@@ -12,14 +12,22 @@ terraform {
   # main infra module uses as its backend, so it cannot use that bucket itself.
 }
 
+data "aws_caller_identity" "current" {}
+
 provider "aws" {
   region = var.aws_region
 }
 
+locals {
+  # Incorporate the AWS account ID to guarantee global uniqueness
+  # without requiring callers to invent a unique name.
+  state_bucket_name = coalesce(var.state_bucket, "arbitrageiq-tfstate-${data.aws_caller_identity.current.account_id}")
+}
+
 resource "aws_s3_bucket" "state" {
-  bucket        = var.state_bucket
+  bucket        = local.state_bucket_name
   force_destroy = false
-  tags          = { Name = var.state_bucket }
+  tags          = { Name = local.state_bucket_name }
 }
 
 resource "aws_s3_bucket_versioning" "state" {

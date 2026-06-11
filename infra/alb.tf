@@ -1,6 +1,6 @@
 resource "aws_security_group" "alb" {
   name        = "${var.app_name}-alb-sg"
-  description = "ALB: allow inbound HTTP from internet"
+  description = "ALB: allow inbound HTTP/HTTPS from internet"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -8,6 +8,14 @@ resource "aws_security_group" "alb" {
     protocol    = "tcp"
     from_port   = 80
     to_port     = 80
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS"
+    protocol    = "tcp"
+    from_port   = 443
+    to_port     = 443
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -63,7 +71,7 @@ resource "aws_lb_target_group" "app" {
   vpc_id      = aws_vpc.main.id
 
   health_check {
-    path                = "/"
+    path                = "/api/health"
     protocol            = "HTTP"
     interval            = 30
     timeout             = 5
@@ -75,13 +83,55 @@ resource "aws_lb_target_group" "app" {
   tags = { Name = "${var.app_name}-tg" }
 }
 
+# ── Listener strategy ────────────────────────────────────────────────────────
+# When var.certificate_arn is set:
+#   • HTTPS listener on 443 forwards traffic to the target group
+#   • HTTP listener on 80 redirects to HTTPS (301)
+# When var.certificate_arn is null (demo/internal use):
+#   • HTTP listener on 80 forwards traffic to the target group
+#   • No HTTPS listener
+
+resource "aws_lb_listener" "https" {
+  count = var.certificate_arn != null ? 1 : 0
+
+  load_balancer_arn = aws_lb.main.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-2021-06"
+  certificate_arn   = var.certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
 
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+  # When HTTPS is configured, redirect HTTP → HTTPS; otherwise forward directly.
+  dynamic "default_action" {
+    for_each = var.certificate_arn != null ? [] : [1]
+
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.app.arn
+    }
+  }
+
+  dynamic "default_action" {
+    for_each = var.certificate_arn != null ? [1] : []
+
+    content {
+      type = "redirect"
+
+      redirect {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
   }
 }

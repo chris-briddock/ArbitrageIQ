@@ -69,12 +69,18 @@ run "subnet_counts" {
   }
 }
 
-run "alb_listens_on_port_80" {
+run "alb_http_listener" {
   command = plan
 
   assert {
     condition     = aws_lb_listener.http.port == 80
-    error_message = "ALB listener must be on port 80"
+    error_message = "ALB HTTP listener must be on port 80"
+  }
+
+  # When a certificate is provided, HTTP must redirect to HTTPS.
+  assert {
+    condition     = var.certificate_arn != null ? length(aws_lb_listener.https) == 1 : length(aws_lb_listener.https) == 0
+    error_message = "HTTPS listener must exist when certificate_arn is set, and must not exist otherwise"
   }
 }
 
@@ -84,13 +90,13 @@ run "task_sizing" {
   command = plan
 
   assert {
-    condition     = aws_ecs_task_definition.app.cpu == "512"
-    error_message = "Task CPU must be 512 units (0.5 vCPU)"
+    condition     = aws_ecs_task_definition.app.cpu == tostring(var.task_cpu)
+    error_message = "Task CPU must match var.task_cpu"
   }
 
   assert {
-    condition     = aws_ecs_task_definition.app.memory == "1024"
-    error_message = "Task memory must be 1024 MiB"
+    condition     = aws_ecs_task_definition.app.memory == tostring(var.task_memory)
+    error_message = "Task memory must match var.task_memory"
   }
 }
 
@@ -98,7 +104,39 @@ run "log_retention" {
   command = plan
 
   assert {
-    condition     = aws_cloudwatch_log_group.app.retention_in_days == 30
-    error_message = "Log group retention must be 30 days"
+    condition     = aws_cloudwatch_log_group.app.retention_in_days == var.log_retention_days
+    error_message = "Log group retention must match var.log_retention_days"
+  }
+}
+
+# ── Health check ──────────────────────────────────────────────────────────────
+
+run "target_group_health_check" {
+  command = plan
+
+  assert {
+    condition     = aws_lb_target_group.app.health_check[0].path == "/api/health"
+    error_message = "Target group health check path must be /api/health"
+  }
+
+  assert {
+    condition     = aws_lb_target_group.app.health_check[0].matcher == "200-299"
+    error_message = "Target group health check matcher must be 200-299"
+  }
+}
+
+# ── Secrets ────────────────────────────────────────────────────────────────────
+
+run "session_secret_has_version" {
+  command = plan
+
+  assert {
+    condition     = aws_secretsmanager_secret_version.session.secret_id == aws_secretsmanager_secret.session.id
+    error_message = "Secret version must reference the session secret"
+  }
+
+  assert {
+    condition     = length(aws_secretsmanager_secret_version.session.secret_string) > 0
+    error_message = "Secret version must contain a non-empty secret value"
   }
 }

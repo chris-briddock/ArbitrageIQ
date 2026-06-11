@@ -6,8 +6,8 @@ variable "aws_region" {
 
 variable "state_bucket" {
   type        = string
-  description = "Globally unique S3 bucket name for OpenTofu state."
-  default     = "arbitrageiq-tfstate"
+  description = "S3 bucket name for OpenTofu state. Leave empty to auto-generate a globally unique name using the AWS account ID."
+  default     = null
 }
 
 variable "lock_table" {

@@ -14,9 +14,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write      # OIDC token for AWS credential federation
-  pull-requests: write # post plan output as a PR comment
-  secrets: write       # sync tofu outputs → GitHub secrets after apply
 
 env:
   TOFU_VERSION: "1.8.0"
@@ -30,6 +27,10 @@ jobs:
     name: Plan
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      id-token: write      # OIDC token for AWS credential federation
+      pull-requests: write # post plan output as a PR comment
     steps:
       - uses: actions/checkout@v4
 
@@ -40,27 +41,21 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Bootstrap state backend
-        id: bootstrap
-        working-directory: infra/bootstrap
-        run: |
-          tofu init -input=false -reconfigure
-          tofu apply -auto-approve -input=false
-          echo "bucket=$(tofu output -raw state_bucket)"     >> "$GITHUB_OUTPUT"
-          echo "table=$(tofu output -raw lock_table)"        >> "$GITHUB_OUTPUT"
-          echo "region=$(tofu output -raw aws_region)"       >> "$GITHUB_OUTPUT"
-
+      # The plan job must not modify AWS resources. Bootstrap state backend
+      # outputs (bucket, table, region) are persisted as GitHub secrets by
+      # the apply job after the first successful deploy. The plan job reads
+      # them from secrets instead of running `tofu apply` on the bootstrap.
       - name: Init
         working-directory: infra
         run: |
           tofu init -input=false -reconfigure \
-            -backend-config="bucket=${{ steps.bootstrap.outputs.bucket }}" \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
             -backend-config="key=arbitrageiq-demo/terraform.tfstate" \
-            -backend-config="region=${{ steps.bootstrap.outputs.region }}" \
-            -backend-config="dynamodb_table=${{ steps.bootstrap.outputs.table }}" \
+            -backend-config="region=${{ secrets.TF_STATE_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_STATE_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: Plan
@@ -117,6 +112,8 @@ jobs:
     name: Create GitHub Environment
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
     steps:
       - name: Create production environment
         env:
@@ -157,6 +154,10 @@ jobs:
     needs: setup-env
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
+    permissions:
+      contents: read
+      id-token: write      # OIDC token for AWS credential federation
+      secrets: write       # sync tofu outputs → GitHub secrets after apply
     steps:
       - uses: actions/checkout@v4
 
@@ -167,7 +168,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Bootstrap state backend
@@ -204,3 +205,13 @@ jobs:
           gh secret set ECS_SERVICE         --body "$(tofu output -raw ecs_service_name)"
           gh secret set ECS_TASK_DEFINITION --body "$(tofu output -raw task_definition_family)"
           gh secret set CONTAINER_NAME      --body "web"
+
+      # Persist bootstrap state backend outputs so the plan job can read
+      # them from secrets instead of running `tofu apply` on every PR.
+      - name: Sync bootstrap outputs to GitHub secrets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh secret set TF_STATE_BUCKET --body "${{ steps.bootstrap.outputs.bucket }}"
+          gh secret set TF_STATE_TABLE  --body "${{ steps.bootstrap.outputs.table }}"
+          gh secret set TF_STATE_REGION --body "${{ steps.bootstrap.outputs.region }}"

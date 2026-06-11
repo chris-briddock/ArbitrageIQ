@@ -35,10 +35,39 @@ echo "==> [2/2] Destroying bootstrap resources..."
 cd "$INFRA_DIR/bootstrap"
 
 # Empty the bucket before destroying it (force_destroy=false protects state).
+# Versioning is enabled, so we must remove all object versions AND delete markers.
+# A plain `aws s3 rm --recursive` only deletes the current (latest) version.
 BUCKET=$(tofu output -raw state_bucket 2>/dev/null || echo "")
 if [[ -n "$BUCKET" ]]; then
-  echo "  Emptying state bucket $BUCKET..."
-  aws s3 rm "s3://$BUCKET" --recursive
+  echo "  Emptying state bucket $BUCKET (including all versions and delete markers)..."
+
+  # Delete all object versions
+  VERSIONS=$(aws s3api list-object-versions \
+    --bucket "$BUCKET" \
+    --query 'Versions[].{Key:Key,VersionId:VersionId}' \
+    --output json 2>/dev/null || echo "[]")
+
+  if echo "$VERSIONS" | jq -e '. | length > 0' >/dev/null 2>&1; then
+    echo "$VERSIONS" | jq -c '.[]' | while read -r entry; do
+      KEY=$(echo "$entry" | jq -r '.Key')
+      VID=$(echo "$entry" | jq -r '.VersionId')
+      aws s3api delete-object --bucket "$BUCKET" --key "$KEY" --version-id "$VID"
+    done
+  fi
+
+  # Delete all delete markers
+  MARKERS=$(aws s3api list-object-versions \
+    --bucket "$BUCKET" \
+    --query 'DeleteMarkers[].{Key:Key,VersionId:VersionId}' \
+    --output json 2>/dev/null || echo "[]")
+
+  if echo "$MARKERS" | jq -e '. | length > 0' >/dev/null 2>&1; then
+    echo "$MARKERS" | jq -c '.[]' | while read -r entry; do
+      KEY=$(echo "$entry" | jq -r '.Key')
+      VID=$(echo "$entry" | jq -r '.VersionId')
+      aws s3api delete-object --bucket "$BUCKET" --key "$KEY" --version-id "$VID"
+    done
+  fi
 fi
 
 tofu destroy -auto-approve -input=false

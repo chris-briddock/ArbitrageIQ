@@ -1,6 +1,6 @@
 output "alb_url" {
-  description = "HTTP URL of the Application Load Balancer."
-  value       = "http://${aws_lb.main.dns_name}"
+  description = "URL of the Application Load Balancer (HTTPS when certificate_arn is set, HTTP otherwise)."
+  value       = var.certificate_arn != null ? "https://${aws_lb.main.dns_name}" : "http://${aws_lb.main.dns_name}"
 }
 
 output "ecr_repository_url" {
@@ -31,6 +31,6 @@ output "task_definition_family" {
 }
 
 output "session_secret_arn" {
-  description = "Secrets Manager ARN — populate this value after apply (see secrets.tf)."
+  description = "Secrets Manager ARN — auto-populated on first apply (see secrets.tf)."
   value       = aws_secretsmanager_secret.session.arn
 }

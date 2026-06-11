@@ -33,3 +33,9 @@ variable "log_retention_days" {
   description = "CloudWatch log retention period in days."
   default     = 30
 }
+
+variable "certificate_arn" {
+  type        = string
+  description = "ARN of an ACM certificate for HTTPS. When set, the ALB uses an HTTPS listener and redirects HTTP → HTTPS. Leave null for HTTP-only (demo/internal use)."
+  default     = null
+}

@@ -9,8 +9,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write # OIDC token for AWS credential federation
-  actions: read   # read infra workflow run status
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -27,6 +25,9 @@ jobs:
   check-infra:
     name: Check infra deployed
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read   # read infra workflow run status
     steps:
       - name: Verify last infra run succeeded
         env:
@@ -47,6 +48,8 @@ jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: src/demo
@@ -80,6 +83,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ci, check-infra]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write # OIDC token for AWS credential federation
     outputs:
       image: ${{ steps.build-push.outputs.image }}
     steps:
@@ -88,7 +94,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
@@ -112,11 +118,14 @@ jobs:
     name: Deploy to ECS
     runs-on: ubuntu-latest
     needs: build-push
+    permissions:
+      contents: read
+      id-token: write # OIDC token for AWS credential federation
     steps:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Download current task definition
