@@ -267,6 +267,7 @@ jobs:
                   "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress",
                   "ec2:AuthorizeSecurityGroupEgress", "ec2:RevokeSecurityGroupEgress",
                   "ec2:DescribeAvailabilityZones", "ec2:DescribeNetworkAcls",
+                  "ec2:DescribeVpcAttribute", "ec2:DescribeAddresses",
                   "ec2:CreateNatGateway", "ec2:DeleteNatGateway", "ec2:DescribeNatGateways",
                   "ec2:AllocateAddress", "ec2:ReleaseAddress",
                   "ec2:AssociateAddress", "ec2:DisassociateAddress",
@@ -285,6 +286,7 @@ jobs:
                   "elasticloadbalancing:DescribeListeners", "elasticloadbalancing:DescribeTargetHealth",
                   "elasticloadbalancing:DescribeLoadBalancerAttributes",
                   "elasticloadbalancing:DescribeTargetGroupAttributes",
+                  "elasticloadbalancing:DescribeListenerAttributes",
                   "elasticloadbalancing:ModifyLoadBalancerAttributes",
                   "elasticloadbalancing:ModifyTargetGroup", "elasticloadbalancing:ModifyTargetGroupAttributes",
                   "elasticloadbalancing:ModifyListener",
@@ -304,6 +306,7 @@ jobs:
                   "ecs:DescribeClusters", "ecs:DescribeServices", "ecs:DescribeTaskSets",
                   "ecs:ListClusters", "ecs:ListServices",
                   "ecs:ListTaskDefinitions", "ecs:ListTaskDefinitionFamilies",
+                  "ecs:ListTagsForResource",
                   "ecs:UpdateClusterSettings", "ecs:PutClusterSetting"
                 ],
                 "Resource": "*"
@@ -320,6 +323,7 @@ jobs:
                   "ecr:GetAuthorizationToken",
                   "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart",
                   "ecr:ListImages", "ecr:DescribeImages",
+                  "ecr:ListTagsForResource",
                   "ecr:TagResource", "ecr:UntagResource",
                   "ecr:PutLifecyclePolicy", "ecr:GetLifecyclePolicy"
                 ],
@@ -348,6 +352,7 @@ jobs:
                   "secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue",
                   "secretsmanager:DescribeSecret", "secretsmanager:UpdateSecret",
                   "secretsmanager:ListSecrets", "secretsmanager:ListSecretVersionIds",
+                  "secretsmanager:GetResourcePolicy",
                   "secretsmanager:TagResource", "secretsmanager:UntagResource"
                 ],
                 "Resource": "*"
@@ -359,6 +364,7 @@ jobs:
                   "logs:CreateLogGroup", "logs:DeleteLogGroup",
                   "logs:DescribeLogGroups", "logs:PutRetentionPolicy",
                   "logs:DeleteRetentionPolicy",
+                  "logs:ListTagsForResource",
                   "logs:ListTagsLogGroup", "logs:TagLogGroup", "logs:UntagLogGroup"
                 ],
                 "Resource": "*"
