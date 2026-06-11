@@ -1,3 +1,8 @@
+output "app_url" {
+  description = "HTTPS entry point for the app (CloudFront default domain)."
+  value       = "https://${aws_cloudfront_distribution.main.domain_name}"
+}
+
 output "alb_url" {
   description = "URL of the Application Load Balancer (HTTPS when certificate_arn is set, HTTP otherwise)."
   value       = var.certificate_arn != null ? "https://${aws_lb.main.dns_name}" : "http://${aws_lb.main.dns_name}"
