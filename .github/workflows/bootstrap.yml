@@ -354,6 +354,16 @@ jobs:
                 "Resource": "*"
               },
               {
+                "Sid": "CloudFront",
+                "Effect": "Allow",
+                "Action": [
+                  "cloudfront:CreateDistribution", "cloudfront:CreateDistributionWithTags",
+                  "cloudfront:UpdateDistribution", "cloudfront:DeleteDistribution",
+                  "cloudfront:TagResource", "cloudfront:UntagResource"
+                ],
+                "Resource": "*"
+              },
+              {
                 "Sid": "ServiceLinkedRoles",
                 "Effect": "Allow",
                 "Action": ["iam:CreateServiceLinkedRole"],
