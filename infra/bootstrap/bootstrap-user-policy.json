@@ -1,0 +1,63 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "GitHubOidcProvider",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:GetOpenIDConnectProvider",
+        "iam:TagOpenIDConnectProvider"
+      ],
+      "Resource": "arn:aws:iam::928182717421:oidc-provider/token.actions.githubusercontent.com"
+    },
+    {
+      "Sid": "ManagePipelineRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:TagRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": "arn:aws:iam::928182717421:role/GitHubActions-ArbitrageIQ*"
+    },
+    {
+      "Sid": "AttachOnlyKnownManagedPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy"
+      ],
+      "Resource": "arn:aws:iam::928182717421:role/GitHubActions-ArbitrageIQ*",
+      "Condition": {
+        "ArnEquals": {
+          "iam:PolicyARN": [
+            "arn:aws:iam::aws:policy/ReadOnlyAccess",
+            "arn:aws:iam::aws:policy/AdministratorAccess"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "StateBucket",
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::arbitrageiq-tfstate-928182717421",
+        "arn:aws:s3:::arbitrageiq-tfstate-928182717421/*"
+      ]
+    },
+    {
+      "Sid": "StateLockTable",
+      "Effect": "Allow",
+      "Action": "dynamodb:*",
+      "Resource": "arn:aws:dynamodb:eu-west-2:928182717421:table/arbitrageiq-state-lock"
+    }
+  ]
+}

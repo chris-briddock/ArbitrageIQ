@@ -17,7 +17,9 @@ name: Bootstrap AWS OIDC
 #   - You should delete (or deactivate) the access key you used here
 #
 # How to run:
-#   GitHub → Actions → "Bootstrap AWS OIDC" → Run workflow → fill 3 fields
+#   1. Set the BOOTSTRAP_AWS_ACCESS_KEY_ID and BOOTSTRAP_AWS_SECRET_ACCESS_KEY
+#      repository secrets (Settings → Secrets and variables → Actions).
+#   2. GitHub → Actions → "Bootstrap AWS OIDC" → Run workflow.
 #
 # What credentials to use:
 #   Any AWS credentials that can create IAM resources. Options:
@@ -31,14 +33,6 @@ name: Bootstrap AWS OIDC
 on:
   workflow_dispatch:
     inputs:
-      aws_access_key_id:
-        description: "AWS Access Key ID (deleted after — see notes above)"
-        required: true
-        type: string
-      aws_secret_access_key:
-        description: "AWS Secret Access Key"
-        required: true
-        type: string
       aws_region:
         description: "AWS region to deploy into"
         required: true
@@ -58,11 +52,19 @@ jobs:
     name: Bootstrap OIDC trust
     runs-on: ubuntu-latest
     steps:
-      # Mask credentials immediately so they never appear in any log line.
-      - name: Mask credentials
+      # Secrets are encrypted at rest and automatically masked in logs, so
+      # no manual ::add-mask:: step is needed. Fail fast with a clear message
+      # if they have not been configured yet. (The secrets context is not
+      # available in step `if:` expressions, hence the env indirection.)
+      - name: Check bootstrap credentials are configured
+        env:
+          KEY_ID: ${{ secrets.BOOTSTRAP_AWS_ACCESS_KEY_ID }}
+          KEY_SECRET: ${{ secrets.BOOTSTRAP_AWS_SECRET_ACCESS_KEY }}
         run: |
-          echo "::add-mask::${{ inputs.aws_access_key_id }}"
-          echo "::add-mask::${{ inputs.aws_secret_access_key }}"
+          if [[ -z "$KEY_ID" || -z "$KEY_SECRET" ]]; then
+            echo "::error::Set the BOOTSTRAP_AWS_ACCESS_KEY_ID and BOOTSTRAP_AWS_SECRET_ACCESS_KEY repository secrets before running this workflow (see header notes)."
+            exit 1
+          fi
 
       # Needed for the state backend bootstrap (infra/bootstrap).
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -70,8 +72,8 @@ jobs:
       - name: Configure temporary AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
-          aws-access-key-id: ${{ inputs.aws_access_key_id }}
-          aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
+          aws-access-key-id: ${{ secrets.BOOTSTRAP_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.BOOTSTRAP_AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ inputs.aws_region }}
 
       - name: Verify credentials
