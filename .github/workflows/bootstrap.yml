@@ -47,7 +47,6 @@ on:
 permissions:
   contents: read
   id-token: write
-  secrets: write # write role ARNs and AWS_REGION back to this repo
 
 env:
   ROLE_NAME_PLAN: GitHubActions-ArbitrageIQ-Plan
@@ -419,7 +418,7 @@ jobs:
 
       - name: Set AWS_PLAN_ROLE_ARN secret
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           gh secret set AWS_PLAN_ROLE_ARN \
             --repo "${{ github.repository }}" \
@@ -427,7 +426,7 @@ jobs:
 
       - name: Set AWS_DEPLOY_ROLE_ARN secret
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           gh secret set AWS_DEPLOY_ROLE_ARN \
             --repo "${{ github.repository }}" \
@@ -435,7 +434,7 @@ jobs:
 
       - name: Set AWS_REGION secret
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           gh secret set AWS_REGION \
             --repo "${{ github.repository }}" \
@@ -443,7 +442,7 @@ jobs:
 
       - name: Remove legacy AWS_ROLE_ARN secret
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           gh secret delete AWS_ROLE_ARN --repo "${{ github.repository }}" || true
 
@@ -466,7 +465,7 @@ jobs:
 
       - name: Set TF_STATE_BUCKET secret
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           gh secret set TF_STATE_BUCKET \
             --repo "${{ github.repository }}" \
@@ -474,7 +473,7 @@ jobs:
 
       - name: Set TF_STATE_TABLE secret
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           gh secret set TF_STATE_TABLE \
             --repo "${{ github.repository }}" \
@@ -482,7 +481,7 @@ jobs:
 
       - name: Set TF_STATE_REGION secret
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           gh secret set TF_STATE_REGION \
             --repo "${{ github.repository }}" \
