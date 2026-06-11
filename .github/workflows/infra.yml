@@ -153,11 +153,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: setup-env
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
+    # Indirection via vars keeps the VS Code Actions extension from flagging
+    # the name as unknown — the environment only exists after setup-env runs.
+    # Override with a repo variable INFRA_ENVIRONMENT if ever needed.
+    environment: ${{ vars.INFRA_ENVIRONMENT || 'production' }}
     permissions:
       contents: read
       id-token: write      # OIDC token for AWS credential federation
-      secrets: write       # sync tofu outputs → GitHub secrets after apply
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
