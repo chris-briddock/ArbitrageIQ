@@ -299,8 +299,6 @@ jobs:
     permissions:
       contents: read
       id-token: write # OIDC token for AWS credential federation
-    outputs:
-      image: ${{ steps.build-push.outputs.image }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
@@ -314,8 +312,11 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419 # v2
 
+      # The image URI is not exposed as a job output: it embeds the AWS
+      # region, whose value is stored as a secret, and GitHub drops job
+      # outputs containing secret values. The deploy job recomposes the
+      # same URI from the account ID, region, repository, and commit SHA.
       - name: Build, tag, and push image to ECR
-        id: build-push
         working-directory: src/demo
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -324,7 +325,6 @@ jobs:
         run: |
           docker build -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
           docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          echo "image=$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
   # ─── Deploy ────────────────────────────────────────────────────────────────
   # Registers a new task definition revision and updates the ECS service.
@@ -347,6 +347,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Recompose the image URI pushed by build-push (see the note there on
+      # why it cannot travel between jobs as an output).
+      - name: Compose image URI
+        id: image
+        env:
+          ECR_REPOSITORY: ${{ needs.infra.outputs.ecr_repository }}
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "image=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
       - name: Download current task definition
         run: |
           aws ecs describe-task-definition \
@@ -360,7 +370,7 @@ jobs:
         with:
           task-definition: task-definition.json
           container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ needs.build-push.outputs.image }}
+          image: ${{ steps.image.outputs.image }}
 
       - name: Deploy to ECS service
         uses: aws-actions/amazon-ecs-deploy-task-definition@a310a830f5c14e583e35d84e4e1ec7dd177c3c9c # v2
