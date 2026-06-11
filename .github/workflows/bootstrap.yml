@@ -1,0 +1,513 @@
+name: Bootstrap AWS OIDC
+
+# ─────────────────────────────────────────────────────────────────────────────
+# One-time setup workflow. Run this ONCE to wire up GitHub Actions → AWS OIDC
+# trust so all other workflows can authenticate without long-lived credentials.
+#
+# Creates two IAM roles with scoped trust policies and permissions:
+#   - Plan role:  read-only + bootstrap state backend (for PR plan jobs)
+#   - Deploy role: scoped write (for infra apply and demo deploy on main)
+#
+# After this workflow succeeds:
+#   - AWS_PLAN_ROLE_ARN, AWS_DEPLOY_ROLE_ARN and AWS_REGION are set as
+#     repository secrets automatically
+#   - The infra and demo pipelines will work without any further setup
+#   - The legacy single-role (if it exists) is removed
+#   - You should delete (or deactivate) the access key you used here
+#
+# How to run:
+#   GitHub → Actions → "Bootstrap AWS OIDC" → Run workflow → fill 3 fields
+#
+# What credentials to use:
+#   Any AWS credentials that can create IAM resources. Options:
+#     a) Root account access key (IAM → Security credentials → Create access key)
+#     b) An IAM user with iam:CreateRole, iam:DeleteRole, iam:AttachRolePolicy,
+#        iam:PutRolePolicy, iam:CreateOpenIDConnectProvider,
+#        iam:GetOpenIDConnectProvider, iam:GetRole, iam:UpdateAssumeRolePolicy
+#   Delete the access key once this workflow has run successfully.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_access_key_id:
+        description: "AWS Access Key ID (deleted after — see notes above)"
+        required: true
+        type: string
+      aws_secret_access_key:
+        description: "AWS Secret Access Key"
+        required: true
+        type: string
+      aws_region:
+        description: "AWS region to deploy into"
+        required: true
+        default: "eu-west-2"
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  secrets: write # write role ARNs and AWS_REGION back to this repo
+
+env:
+  ROLE_NAME_PLAN: GitHubActions-ArbitrageIQ-Plan
+  ROLE_NAME_DEPLOY: GitHubActions-ArbitrageIQ-Deploy
+
+jobs:
+  bootstrap:
+    name: Bootstrap OIDC trust
+    runs-on: ubuntu-latest
+    steps:
+      # Mask credentials immediately so they never appear in any log line.
+      - name: Mask credentials
+        run: |
+          echo "::add-mask::${{ inputs.aws_access_key_id }}"
+          echo "::add-mask::${{ inputs.aws_secret_access_key }}"
+
+      - name: Configure temporary AWS credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          aws-access-key-id: ${{ inputs.aws_access_key_id }}
+          aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Verify credentials
+        run: aws sts get-caller-identity
+
+      # ── OIDC provider ──────────────────────────────────────────────────────
+
+      - name: Create GitHub Actions OIDC provider (idempotent)
+        id: oidc
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          OIDC_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+
+          if aws iam get-open-id-connect-provider \
+               --open-id-connect-provider-arn "$OIDC_ARN" &>/dev/null; then
+            echo "OIDC provider already exists."
+          else
+            aws iam create-open-id-connect-provider \
+              --url https://token.actions.githubusercontent.com \
+              --client-id-list sts.amazonaws.com \
+              --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+            echo "OIDC provider created."
+          fi
+
+          echo "oidc_arn=${OIDC_ARN}" >> "$GITHUB_OUTPUT"
+          echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
+
+      # ── Plan role (read-only + bootstrap state backend) ────────────────────
+      # Used by: infra.yml plan job (PRs only)
+      # Trust:   repo:OWNER/REPO:ref:refs/pull/* + infra.yml workflow
+      # Policy:  ReadOnlyAccess + inline extras for bootstrap state backend
+
+      - name: Create Plan role (idempotent)
+        id: plan-role
+        env:
+          OIDC_ARN: ${{ steps.oidc.outputs.oidc_arn }}
+        run: |
+          TRUST_POLICY=$(cat <<EOF
+          {
+            "Version": "2012-10-17",
+            "Statement": [{
+              "Effect": "Allow",
+              "Principal": { "Federated": "${OIDC_ARN}" },
+              "Action": "sts:AssumeRoleWithWebIdentity",
+              "Condition": {
+                "StringEquals": {
+                  "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                },
+                "StringLike": {
+                  "token.actions.githubusercontent.com:sub": "repo:${{ github.repository }}:ref:refs/pull/*",
+                  "token.actions.githubusercontent.com:job_workflow_ref": "${{ github.repository }}/.github/workflows/infra.yml@*"
+                }
+              }
+            }]
+          }
+          EOF
+          )
+
+          if aws iam get-role --role-name "$ROLE_NAME_PLAN" &>/dev/null; then
+            echo "Plan role already exists — refreshing trust policy."
+            aws iam update-assume-role-policy \
+              --role-name "$ROLE_NAME_PLAN" \
+              --policy-document "$TRUST_POLICY"
+            PLAN_ROLE_ARN=$(aws iam get-role \
+              --role-name "$ROLE_NAME_PLAN" \
+              --query Role.Arn --output text)
+          else
+            PLAN_ROLE_ARN=$(aws iam create-role \
+              --role-name "$ROLE_NAME_PLAN" \
+              --assume-role-policy-document "$TRUST_POLICY" \
+              --description "GitHub Actions plan (read-only) for ${{ github.repository }}" \
+              --query Role.Arn --output text)
+            echo "Plan role created."
+          fi
+
+          # ReadOnlyAccess covers all describe/get/list operations needed by
+          # tofu plan. The inline policy below adds write permissions for the
+          # bootstrap state backend (S3 bucket + DynamoDB lock table) which
+          # the plan job also runs, and iam:PassRole for task definition checks.
+          aws iam attach-role-policy \
+            --role-name "$ROLE_NAME_PLAN" \
+            --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess || true
+
+          cat > /tmp/plan-extras.json <<'POLICY'
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "BootstrapStateBackend",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:CreateBucket", "s3:DeleteBucket",
+                  "s3:PutObject", "s3:DeleteObject",
+                  "s3:PutBucketVersioning",
+                  "s3:PutEncryptionConfiguration",
+                  "s3:PutBucketPublicAccessBlock",
+                  "dynamodb:CreateTable", "dynamodb:DeleteTable",
+                  "dynamodb:UpdateTable",
+                  "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:UpdateItem"
+                ],
+                "Resource": "*"
+              },
+              {
+                "Sid": "IamPassRole",
+                "Effect": "Allow",
+                "Action": "iam:PassRole",
+                "Resource": "*"
+              }
+            ]
+          }
+          POLICY
+
+          aws iam put-role-policy \
+            --role-name "$ROLE_NAME_PLAN" \
+            --policy-name PlanExtras \
+            --policy-document file:///tmp/plan-extras.json
+
+          echo "plan_role_arn=${PLAN_ROLE_ARN}" >> "$GITHUB_OUTPUT"
+
+      # ── Deploy role (scoped write for infra + demo) ────────────────────────
+      # Used by: infra.yml apply job, demo.yml build-push + deploy (main only)
+      # Trust:   repo:OWNER/REPO:ref:refs/heads/main + infra.yml or demo.yml
+      # Policy:  scoped inline policy (no AdministratorAccess)
+
+      - name: Create Deploy role (idempotent)
+        id: deploy-role
+        env:
+          OIDC_ARN: ${{ steps.oidc.outputs.oidc_arn }}
+        run: |
+          TRUST_POLICY=$(cat <<EOF
+          {
+            "Version": "2012-10-17",
+            "Statement": [{
+              "Effect": "Allow",
+              "Principal": { "Federated": "${OIDC_ARN}" },
+              "Action": "sts:AssumeRoleWithWebIdentity",
+              "Condition": {
+                "StringEquals": {
+                  "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                  "token.actions.githubusercontent.com:sub": "repo:${{ github.repository }}:ref:refs/heads/main"
+                },
+                "StringLike": {
+                  "token.actions.githubusercontent.com:job_workflow_ref": [
+                    "${{ github.repository }}/.github/workflows/infra.yml@*",
+                    "${{ github.repository }}/.github/workflows/demo.yml@*"
+                  ]
+                }
+              }
+            }]
+          }
+          EOF
+          )
+
+          if aws iam get-role --role-name "$ROLE_NAME_DEPLOY" &>/dev/null; then
+            echo "Deploy role already exists — refreshing trust policy."
+            aws iam update-assume-role-policy \
+              --role-name "$ROLE_NAME_DEPLOY" \
+              --policy-document "$TRUST_POLICY"
+            DEPLOY_ROLE_ARN=$(aws iam get-role \
+              --role-name "$ROLE_NAME_DEPLOY" \
+              --query Role.Arn --output text)
+          else
+            DEPLOY_ROLE_ARN=$(aws iam create-role \
+              --role-name "$ROLE_NAME_DEPLOY" \
+              --assume-role-policy-document "$TRUST_POLICY" \
+              --description "GitHub Actions deploy (scoped write) for ${{ github.repository }}" \
+              --query Role.Arn --output text)
+            echo "Deploy role created."
+          fi
+
+          # Scoped inline policy replacing the previous AdministratorAccess.
+          # Covers only the AWS services used by infra and demo CI/CD.
+          cat > /tmp/deploy-policy.json <<'POLICY'
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "VPCAndNetworking",
+                "Effect": "Allow",
+                "Action": [
+                  "ec2:CreateVpc", "ec2:DeleteVpc", "ec2:DescribeVpcs", "ec2:ModifyVpcAttribute",
+                  "ec2:CreateSubnet", "ec2:DeleteSubnet", "ec2:DescribeSubnets", "ec2:ModifySubnetAttribute",
+                  "ec2:CreateInternetGateway", "ec2:DeleteInternetGateway", "ec2:DescribeInternetGateways",
+                  "ec2:AttachInternetGateway", "ec2:DetachInternetGateway",
+                  "ec2:CreateRouteTable", "ec2:DeleteRouteTable", "ec2:DescribeRouteTables",
+                  "ec2:CreateRoute", "ec2:DeleteRoute", "ec2:ReplaceRoute",
+                  "ec2:AssociateRouteTable", "ec2:DisassociateRouteTable",
+                  "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup", "ec2:DescribeSecurityGroups",
+                  "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress",
+                  "ec2:AuthorizeSecurityGroupEgress", "ec2:RevokeSecurityGroupEgress",
+                  "ec2:DescribeAvailabilityZones", "ec2:DescribeNetworkAcls",
+                  "ec2:CreateNatGateway", "ec2:DeleteNatGateway", "ec2:DescribeNatGateways",
+                  "ec2:AllocateAddress", "ec2:ReleaseAddress",
+                  "ec2:AssociateAddress", "ec2:DisassociateAddress",
+                  "ec2:CreateTags"
+                ],
+                "Resource": "*"
+              },
+              {
+                "Sid": "LoadBalancing",
+                "Effect": "Allow",
+                "Action": [
+                  "elasticloadbalancing:CreateLoadBalancer", "elasticloadbalancing:DeleteLoadBalancer",
+                  "elasticloadbalancing:CreateTargetGroup", "elasticloadbalancing:DeleteTargetGroup",
+                  "elasticloadbalancing:CreateListener", "elasticloadbalancing:DeleteListener",
+                  "elasticloadbalancing:DescribeLoadBalancers", "elasticloadbalancing:DescribeTargetGroups",
+                  "elasticloadbalancing:DescribeListeners", "elasticloadbalancing:DescribeTargetHealth",
+                  "elasticloadbalancing:DescribeLoadBalancerAttributes",
+                  "elasticloadbalancing:DescribeTargetGroupAttributes",
+                  "elasticloadbalancing:ModifyLoadBalancerAttributes",
+                  "elasticloadbalancing:ModifyTargetGroup", "elasticloadbalancing:ModifyTargetGroupAttributes",
+                  "elasticloadbalancing:ModifyListener",
+                  "elasticloadbalancing:AddTags", "elasticloadbalancing:RemoveTags",
+                  "elasticloadbalancing:DescribeTags"
+                ],
+                "Resource": "*"
+              },
+              {
+                "Sid": "ECS",
+                "Effect": "Allow",
+                "Action": [
+                  "ecs:CreateCluster", "ecs:DeleteCluster",
+                  "ecs:CreateService", "ecs:DeleteService", "ecs:UpdateService",
+                  "ecs:RegisterTaskDefinition", "ecs:DeregisterTaskDefinition",
+                  "ecs:DescribeTaskDefinition",
+                  "ecs:DescribeClusters", "ecs:DescribeServices", "ecs:DescribeTaskSets",
+                  "ecs:ListClusters", "ecs:ListServices",
+                  "ecs:ListTaskDefinitions", "ecs:ListTaskDefinitionFamilies",
+                  "ecs:UpdateClusterSettings", "ecs:PutClusterSetting"
+                ],
+                "Resource": "*"
+              },
+              {
+                "Sid": "ECR",
+                "Effect": "Allow",
+                "Action": [
+                  "ecr:CreateRepository", "ecr:DeleteRepository",
+                  "ecr:DescribeRepositories", "ecr:GetRepositoryPolicy",
+                  "ecr:PutImageScanningConfiguration",
+                  "ecr:BatchGetImage", "ecr:BatchCheckLayerAvailability",
+                  "ecr:CompleteLayerUpload", "ecr:GetDownloadUrlForLayer",
+                  "ecr:GetAuthorizationToken",
+                  "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart",
+                  "ecr:ListImages", "ecr:DescribeImages",
+                  "ecr:TagResource", "ecr:UntagResource",
+                  "ecr:PutLifecyclePolicy", "ecr:GetLifecyclePolicy"
+                ],
+                "Resource": "*"
+              },
+              {
+                "Sid": "IAM",
+                "Effect": "Allow",
+                "Action": [
+                  "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:ListRoles",
+                  "iam:UpdateRole", "iam:UpdateRoleDescription", "iam:UpdateAssumeRolePolicy",
+                  "iam:AttachRolePolicy", "iam:DetachRolePolicy",
+                  "iam:ListAttachedRolePolicies", "iam:ListRolePolicies",
+                  "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:GetRolePolicy",
+                  "iam:CreatePolicy", "iam:DeletePolicy", "iam:GetPolicy", "iam:GetPolicyVersion",
+                  "iam:ListPolicies", "iam:ListPolicyVersions",
+                  "iam:PassRole"
+                ],
+                "Resource": "*"
+              },
+              {
+                "Sid": "SecretsManager",
+                "Effect": "Allow",
+                "Action": [
+                  "secretsmanager:CreateSecret", "secretsmanager:DeleteSecret",
+                  "secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue",
+                  "secretsmanager:DescribeSecret", "secretsmanager:UpdateSecret",
+                  "secretsmanager:ListSecrets", "secretsmanager:ListSecretVersionIds",
+                  "secretsmanager:TagResource", "secretsmanager:UntagResource"
+                ],
+                "Resource": "*"
+              },
+              {
+                "Sid": "CloudWatchLogs",
+                "Effect": "Allow",
+                "Action": [
+                  "logs:CreateLogGroup", "logs:DeleteLogGroup",
+                  "logs:DescribeLogGroups", "logs:PutRetentionPolicy",
+                  "logs:DeleteRetentionPolicy",
+                  "logs:ListTagsLogGroup", "logs:TagLogGroup", "logs:UntagLogGroup"
+                ],
+                "Resource": "*"
+              },
+              {
+                "Sid": "S3StateBackend",
+                "Effect": "Allow",
+                "Action": [
+                  "s3:CreateBucket", "s3:DeleteBucket",
+                  "s3:GetObject", "s3:PutObject", "s3:DeleteObject",
+                  "s3:ListBucket", "s3:GetBucketLocation",
+                  "s3:GetBucketVersioning", "s3:PutBucketVersioning",
+                  "s3:GetEncryptionConfiguration", "s3:PutEncryptionConfiguration",
+                  "s3:GetBucketPublicAccessBlock", "s3:PutBucketPublicAccessBlock",
+                  "s3:GetBucketPolicy", "s3:PutBucketPolicy"
+                ],
+                "Resource": "*"
+              },
+              {
+                "Sid": "DynamoDBStateLock",
+                "Effect": "Allow",
+                "Action": [
+                  "dynamodb:CreateTable", "dynamodb:DeleteTable",
+                  "dynamodb:DescribeTable", "dynamodb:UpdateTable",
+                  "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem",
+                  "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan"
+                ],
+                "Resource": "*"
+              }
+            ]
+          }
+          POLICY
+
+          aws iam put-role-policy \
+            --role-name "$ROLE_NAME_DEPLOY" \
+            --policy-name DeployPolicy \
+            --policy-document file:///tmp/deploy-policy.json
+
+          echo "deploy_role_arn=${DEPLOY_ROLE_ARN}" >> "$GITHUB_OUTPUT"
+
+      # ── Remove legacy single role ────────────────────────────────────────
+
+      - name: Remove legacy role (if present)
+        run: |
+          LEGACY_ROLE="GitHubActions-ArbitrageIQ"
+          if aws iam get-role --role-name "$LEGACY_ROLE" &>/dev/null; then
+            # Detach AdministratorAccess
+            aws iam detach-role-policy \
+              --role-name "$LEGACY_ROLE" \
+              --policy-arn arn:aws:iam::aws:policy/AdministratorAccess 2>/dev/null || true
+
+            # Remove any inline policies
+            for policy in $(aws iam list-role-policies --role-name "$LEGACY_ROLE" --query PolicyNames --output text); do
+              aws iam delete-role-policy --role-name "$LEGACY_ROLE" --policy-name "$policy" 2>/dev/null || true
+            done
+
+            # Delete the role
+            aws iam delete-role --role-name "$LEGACY_ROLE" || true
+            echo "Legacy role ${LEGACY_ROLE} deleted."
+          else
+            echo "No legacy role found — nothing to clean up."
+          fi
+
+      # ── Persist outputs as GitHub secrets ──────────────────────────────────
+
+      - name: Set AWS_PLAN_ROLE_ARN secret
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh secret set AWS_PLAN_ROLE_ARN \
+            --repo "${{ github.repository }}" \
+            --body "${{ steps.plan-role.outputs.plan_role_arn }}"
+
+      - name: Set AWS_DEPLOY_ROLE_ARN secret
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh secret set AWS_DEPLOY_ROLE_ARN \
+            --repo "${{ github.repository }}" \
+            --body "${{ steps.deploy-role.outputs.deploy_role_arn }}"
+
+      - name: Set AWS_REGION secret
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh secret set AWS_REGION \
+            --repo "${{ github.repository }}" \
+            --body "${{ inputs.aws_region }}"
+
+      - name: Remove legacy AWS_ROLE_ARN secret
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh secret delete AWS_ROLE_ARN --repo "${{ github.repository }}" || true
+
+      # ── Bootstrap state backend ────────────────────────────────────────────
+      # Create the S3 bucket and DynamoDB lock table so the plan job can read
+      # TF_STATE_* secrets from the very first PR instead of needing an
+      # initial apply run first.
+
+      - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
+
+      - name: Bootstrap state backend
+        id: tf-bootstrap
+        working-directory: infra/bootstrap
+        run: |
+          tofu init -input=false
+          tofu apply -auto-approve -input=false
+          echo "bucket=$(tofu output -raw state_bucket)" >> "$GITHUB_OUTPUT"
+          echo "table=$(tofu output -raw lock_table)"     >> "$GITHUB_OUTPUT"
+          echo "region=$(tofu output -raw aws_region)"    >> "$GITHUB_OUTPUT"
+
+      - name: Set TF_STATE_BUCKET secret
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh secret set TF_STATE_BUCKET \
+            --repo "${{ github.repository }}" \
+            --body "${{ steps.tf-bootstrap.outputs.bucket }}"
+
+      - name: Set TF_STATE_TABLE secret
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh secret set TF_STATE_TABLE \
+            --repo "${{ github.repository }}" \
+            --body "${{ steps.tf-bootstrap.outputs.table }}"
+
+      - name: Set TF_STATE_REGION secret
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh secret set TF_STATE_REGION \
+            --repo "${{ github.repository }}" \
+            --body "${{ steps.tf-bootstrap.outputs.region }}"
+
+      # ── Summary ────────────────────────────────────────────────────────────
+
+      - name: Print summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ## Bootstrap complete ✓
+
+          | Secret | Value |
+          |--------|-------|
+          | \`AWS_PLAN_ROLE_ARN\`   | \`${{ steps.plan-role.outputs.plan_role_arn }}\` |
+          | \`AWS_DEPLOY_ROLE_ARN\` | \`${{ steps.deploy-role.outputs.deploy_role_arn }}\` |
+          | \`AWS_REGION\`          | \`${{ inputs.aws_region }}\` |
+          | \`TF_STATE_BUCKET\`    | \`${{ steps.tf-bootstrap.outputs.bucket }}\` |
+          | \`TF_STATE_TABLE\`     | \`${{ steps.tf-bootstrap.outputs.table }}\` |
+          | \`TF_STATE_REGION\`    | \`${{ steps.tf-bootstrap.outputs.region }}\` |
+
+          ### Next steps
+          1. **Delete the access key** you used to run this workflow — it is no longer needed.
+          2. Push a change to \`infra/\` on \`main\` to trigger the infrastructure pipeline.
+          3. Push a change to \`src/demo/\` on \`main\` to trigger the application pipeline.
+
+          All authentication uses OIDC with scoped roles — no stored credentials.
+          EOF
