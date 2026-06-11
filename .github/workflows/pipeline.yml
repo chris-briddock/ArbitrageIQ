@@ -261,6 +261,20 @@ jobs:
               --force-delete-without-recovery
           fi
 
+      # The ECS service-linked role is normally auto-created with the first
+      # cluster, but only if the caller may iam:CreateServiceLinkedRole at
+      # that moment. CreateService requires the role yet never creates it,
+      # so ensure it exists before applying.
+      - name: Ensure ECS service-linked role exists
+        run: |
+          if ! aws iam get-role --role-name AWSServiceRoleForECS >/dev/null 2>&1; then
+            aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com
+            aws iam wait role-exists --role-name AWSServiceRoleForECS
+            # IAM is eventually consistent; give the new role a moment to
+            # propagate before ECS tries to assume it.
+            sleep 15
+          fi
+
       - name: Apply
         working-directory: infra
         run: tofu apply -auto-approve -input=false
