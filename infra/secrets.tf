@@ -10,6 +10,10 @@ resource "random_password" "session_secret" {
 resource "aws_secretsmanager_secret" "session" {
   name        = "${var.app_name}/session-secret"
   description = "HMAC secret for BFF session cookies (SESSION_SECRET env var)"
+
+  # Demo project: release the name immediately on destroy instead of holding
+  # it in the default 30-day recovery window, which blocks re-creation.
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "session" {

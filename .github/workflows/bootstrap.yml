@@ -268,6 +268,7 @@ jobs:
                   "ec2:AuthorizeSecurityGroupEgress", "ec2:RevokeSecurityGroupEgress",
                   "ec2:DescribeAvailabilityZones", "ec2:DescribeNetworkAcls",
                   "ec2:DescribeVpcAttribute", "ec2:DescribeAddresses",
+                  "ec2:DescribeAddressesAttribute",
                   "ec2:CreateNatGateway", "ec2:DeleteNatGateway", "ec2:DescribeNatGateways",
                   "ec2:AllocateAddress", "ec2:ReleaseAddress",
                   "ec2:AssociateAddress", "ec2:DisassociateAddress",
@@ -343,6 +344,20 @@ jobs:
                   "iam:PassRole"
                 ],
                 "Resource": "*"
+              },
+              {
+                "Sid": "ServiceLinkedRoles",
+                "Effect": "Allow",
+                "Action": ["iam:CreateServiceLinkedRole"],
+                "Resource": "*",
+                "Condition": {
+                  "StringEquals": {
+                    "iam:AWSServiceName": [
+                      "elasticloadbalancing.amazonaws.com",
+                      "ecs.amazonaws.com"
+                    ]
+                  }
+                }
               },
               {
                 "Sid": "SecretsManager",
