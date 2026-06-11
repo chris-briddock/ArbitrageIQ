@@ -25,9 +25,10 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([{
     name  = "web"
-    # Seeded with :latest for initial provisioning.
-    # The GitHub Actions pipeline updates this revision on every push to main.
-    image     = "${aws_ecr_repository.main.repository_url}:latest"
+    # Seed placeholder — the CI/CD pipeline registers a new task definition
+    # revision with the SHA-tagged image on every push to main, so this value
+    # is overridden after the first deploy.
+    image     = "${aws_ecr_repository.main.repository_url}:seed"
     essential = true
 
     portMappings = [{
@@ -76,6 +77,8 @@ resource "aws_ecs_service" "app" {
     container_name   = "web"
     container_port   = 3000
   }
+
+  health_check_grace_period_seconds = 120
 
   # The CI/CD pipeline owns the task definition revision after initial
   # provisioning. Prevent `tofu apply` from reverting it.

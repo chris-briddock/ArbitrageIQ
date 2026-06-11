@@ -161,6 +161,9 @@ echo "==> [5/5] Setting GitHub Actions secrets..."
 
 if [[ -n "$GH_TOKEN" ]]; then
   export GH_TOKEN
+elif EXISTING_TOKEN=$(gh auth token 2>/dev/null) && [[ -n "$EXISTING_TOKEN" ]]; then
+  echo "  No --token provided, but an existing gh session was found."
+  export GH_TOKEN="$EXISTING_TOKEN"
 else
   echo ""
   echo "  No --token provided. You need to authenticate with GitHub."

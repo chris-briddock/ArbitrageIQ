@@ -26,13 +26,16 @@ if [[ -f "$BACKEND_VARS" ]]; then
   tofu init -backend-config=backend.tfvars -input=false -reconfigure
   tofu destroy -auto-approve -input=false
 else
-  echo "  backend.tfvars not found — skipping main infra destroy."
+  echo "::error::backend.tfvars not found — cannot safely destroy infrastructure."
+  echo "::error::Refusing to proceed to avoid orphaning real resources."
+  exit 1
 fi
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 echo "==> [2/2] Destroying bootstrap resources..."
 cd "$INFRA_DIR/bootstrap"
+tofu init -input=false -reconfigure
 
 # Empty the bucket before destroying it (force_destroy=false protects state).
 # Versioning is enabled, so we must remove all object versions AND delete markers.
