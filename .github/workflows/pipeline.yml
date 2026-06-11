@@ -242,6 +242,25 @@ jobs:
             -backend-config="dynamodb_table=${{ secrets.TF_STATE_TABLE }}" \
             -backend-config="encrypt=true"
 
+      # Secrets Manager holds deleted secrets in a recovery window (30 days
+      # by default) during which the name cannot be reused, so a secret
+      # deleted outside of Tofu blocks re-creation. The session secret's
+      # value is auto-generated on apply, so force-deleting a scheduled
+      # copy loses nothing.
+      - name: Clear secrets scheduled for deletion
+        run: |
+          SECRET_ID="arbitrageiq-demo/session-secret"
+          DELETED_DATE=$(aws secretsmanager describe-secret \
+            --secret-id "$SECRET_ID" \
+            --query DeletedDate --output text 2>/dev/null || echo "None")
+
+          if [[ "$DELETED_DATE" != "None" ]]; then
+            echo "Secret $SECRET_ID is scheduled for deletion — force-deleting so apply can re-create it."
+            aws secretsmanager delete-secret \
+              --secret-id "$SECRET_ID" \
+              --force-delete-without-recovery
+          fi
+
       - name: Apply
         working-directory: infra
         run: tofu apply -auto-approve -input=false
