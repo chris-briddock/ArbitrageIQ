@@ -1,0 +1,36 @@
+output "alb_url" {
+  description = "HTTP URL of the Application Load Balancer."
+  value       = "http://${aws_lb.main.dns_name}"
+}
+
+output "ecr_repository_url" {
+  description = "Full ECR image URI (without tag). Used as the base path in CI/CD."
+  value       = aws_ecr_repository.main.repository_url
+}
+
+# ── Values to copy into GitHub Actions secrets ────────────────────────────────
+
+output "ecr_repository_name" {
+  description = "→ GitHub secret ECR_REPOSITORY"
+  value       = aws_ecr_repository.main.name
+}
+
+output "ecs_cluster_name" {
+  description = "→ GitHub secret ECS_CLUSTER"
+  value       = aws_ecs_cluster.main.name
+}
+
+output "ecs_service_name" {
+  description = "→ GitHub secret ECS_SERVICE"
+  value       = aws_ecs_service.app.name
+}
+
+output "task_definition_family" {
+  description = "→ GitHub secret ECS_TASK_DEFINITION"
+  value       = aws_ecs_task_definition.app.family
+}
+
+output "session_secret_arn" {
+  description = "Secrets Manager ARN — populate this value after apply (see secrets.tf)."
+  value       = aws_secretsmanager_secret.session.arn
+}

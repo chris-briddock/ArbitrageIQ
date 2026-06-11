@@ -1,0 +1,180 @@
+name: Bootstrap AWS OIDC
+
+# ─────────────────────────────────────────────────────────────────────────────
+# One-time setup workflow. Run this ONCE to wire up GitHub Actions → AWS OIDC
+# trust so all other workflows can authenticate without long-lived credentials.
+#
+# After this workflow succeeds:
+#   - AWS_ROLE_ARN and AWS_REGION are set as repository secrets automatically
+#   - The infra and demo pipelines will work without any further setup
+#   - You should delete (or deactivate) the access key you used here
+#
+# How to run:
+#   GitHub → Actions → "Bootstrap AWS OIDC" → Run workflow → fill 3 fields
+#
+# What credentials to use:
+#   Any AWS credentials that can create IAM resources. Options:
+#     a) Root account access key (IAM → Security credentials → Create access key)
+#     b) An IAM user with iam:CreateRole, iam:AttachRolePolicy,
+#        iam:CreateOpenIDConnectProvider, iam:GetOpenIDConnectProvider,
+#        iam:GetRole, iam:UpdateAssumeRolePolicy
+#   Delete the access key once this workflow has run successfully.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_access_key_id:
+        description: "AWS Access Key ID (deleted after — see notes above)"
+        required: true
+        type: string
+      aws_secret_access_key:
+        description: "AWS Secret Access Key"
+        required: true
+        type: string
+      aws_region:
+        description: "AWS region to deploy into"
+        required: true
+        default: "eu-west-2"
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  secrets: write # write AWS_ROLE_ARN and AWS_REGION back to this repo
+
+env:
+  ROLE_NAME: GitHubActions-ArbitrageIQ
+
+jobs:
+  bootstrap:
+    name: Bootstrap OIDC trust
+    runs-on: ubuntu-latest
+    steps:
+      # Mask credentials immediately so they never appear in any log line.
+      - name: Mask credentials
+        run: |
+          echo "::add-mask::${{ inputs.aws_access_key_id }}"
+          echo "::add-mask::${{ inputs.aws_secret_access_key }}"
+
+      - name: Configure temporary AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ inputs.aws_access_key_id }}
+          aws-secret-access-key: ${{ inputs.aws_secret_access_key }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Verify credentials
+        run: aws sts get-caller-identity
+
+      # ── OIDC provider ──────────────────────────────────────────────────────
+
+      - name: Create GitHub Actions OIDC provider (idempotent)
+        id: oidc
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          OIDC_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
+
+          if aws iam get-open-id-connect-provider \
+               --open-id-connect-provider-arn "$OIDC_ARN" &>/dev/null; then
+            echo "OIDC provider already exists."
+          else
+            aws iam create-open-id-connect-provider \
+              --url https://token.actions.githubusercontent.com \
+              --client-id-list sts.amazonaws.com \
+              --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+            echo "OIDC provider created."
+          fi
+
+          echo "oidc_arn=${OIDC_ARN}" >> "$GITHUB_OUTPUT"
+          echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
+
+      # ── IAM role ───────────────────────────────────────────────────────────
+
+      - name: Create IAM role (idempotent)
+        id: role
+        env:
+          OIDC_ARN: ${{ steps.oidc.outputs.oidc_arn }}
+        run: |
+          TRUST_POLICY=$(cat <<EOF
+          {
+            "Version": "2012-10-17",
+            "Statement": [{
+              "Effect": "Allow",
+              "Principal": { "Federated": "${OIDC_ARN}" },
+              "Action": "sts:AssumeRoleWithWebIdentity",
+              "Condition": {
+                "StringEquals": {
+                  "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                },
+                "StringLike": {
+                  "token.actions.githubusercontent.com:sub": "repo:${{ github.repository }}:*"
+                }
+              }
+            }]
+          }
+          EOF
+          )
+
+          if aws iam get-role --role-name "$ROLE_NAME" &>/dev/null; then
+            echo "Role already exists — refreshing trust policy."
+            aws iam update-assume-role-policy \
+              --role-name "$ROLE_NAME" \
+              --policy-document "$TRUST_POLICY"
+            ROLE_ARN=$(aws iam get-role \
+              --role-name "$ROLE_NAME" \
+              --query Role.Arn --output text)
+          else
+            ROLE_ARN=$(aws iam create-role \
+              --role-name "$ROLE_NAME" \
+              --assume-role-policy-document "$TRUST_POLICY" \
+              --description "GitHub Actions CI/CD for ${{ github.repository }}" \
+              --query Role.Arn --output text)
+            echo "Role created."
+          fi
+
+          # AdministratorAccess lets the pipelines manage all infrastructure.
+          # Scope this down once the project is stable.
+          aws iam attach-role-policy \
+            --role-name "$ROLE_NAME" \
+            --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
+
+          echo "role_arn=${ROLE_ARN}" >> "$GITHUB_OUTPUT"
+
+      # ── Persist outputs as GitHub secrets ──────────────────────────────────
+
+      - name: Set AWS_ROLE_ARN secret
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh secret set AWS_ROLE_ARN \
+            --repo "${{ github.repository }}" \
+            --body "${{ steps.role.outputs.role_arn }}"
+
+      - name: Set AWS_REGION secret
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh secret set AWS_REGION \
+            --repo "${{ github.repository }}" \
+            --body "${{ inputs.aws_region }}"
+
+      # ── Summary ────────────────────────────────────────────────────────────
+
+      - name: Print summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ## Bootstrap complete ✓
+
+          | Secret | Value |
+          |--------|-------|
+          | \`AWS_ROLE_ARN\` | \`${{ steps.role.outputs.role_arn }}\` |
+          | \`AWS_REGION\`   | \`${{ inputs.aws_region }}\` |
+
+          ### Next steps
+          1. **Delete the access key** you used to run this workflow — it is no longer needed.
+          2. Push a change to \`infra/\` on \`main\` to trigger the infrastructure pipeline.
+          3. Push a change to \`src/demo/\` on \`main\` to trigger the application pipeline.
+
+          All authentication from this point forward uses OIDC — no stored credentials.
+          EOF
