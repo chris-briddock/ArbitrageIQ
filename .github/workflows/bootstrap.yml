@@ -103,7 +103,8 @@ jobs:
 
       # ── Plan role (read-only + bootstrap state backend) ────────────────────
       # Used by: pipeline.yml plan job (PRs only)
-      # Trust:   repo:OWNER/REPO:ref:refs/pull/* + pipeline.yml workflow
+      # Trust:   sub claim repo:OWNER/REPO:pull_request (the subject GitHub
+      #          issues for pull_request events) + pipeline.yml workflow
       # Policy:  ReadOnlyAccess + inline extras for bootstrap state backend
 
       - name: Create Plan role (idempotent)
@@ -123,7 +124,7 @@ jobs:
                   "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
                 },
                 "StringLike": {
-                  "token.actions.githubusercontent.com:sub": "repo:${{ github.repository }}:ref:refs/pull/*",
+                  "token.actions.githubusercontent.com:sub": "repo:${{ github.repository }}:pull_request",
                   "token.actions.githubusercontent.com:job_workflow_ref": "${{ github.repository }}/.github/workflows/pipeline.yml@*"
                 }
               }
