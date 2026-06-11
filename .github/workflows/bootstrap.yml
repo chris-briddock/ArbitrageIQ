@@ -466,6 +466,27 @@ jobs:
         working-directory: infra/bootstrap
         run: |
           tofu init -input=false
+
+          # This module intentionally uses local state, which is empty on
+          # every CI run. Adopt resources left by a previous bootstrap so a
+          # re-run does not fail with AlreadyExists errors.
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="arbitrageiq-tfstate-${ACCOUNT_ID}"
+          TABLE="arbitrageiq-state-lock"
+
+          if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            tofu import -input=false aws_s3_bucket.state "$BUCKET"
+            # Sub-configurations may not exist if a previous run was
+            # interrupted; apply creates whatever fails to import.
+            tofu import -input=false aws_s3_bucket_versioning.state "$BUCKET" || true
+            tofu import -input=false aws_s3_bucket_server_side_encryption_configuration.state "$BUCKET" || true
+            tofu import -input=false aws_s3_bucket_public_access_block.state "$BUCKET" || true
+          fi
+
+          if aws dynamodb describe-table --table-name "$TABLE" >/dev/null 2>&1; then
+            tofu import -input=false aws_dynamodb_table.lock "$TABLE"
+          fi
+
           tofu apply -auto-approve -input=false
           echo "bucket=$(tofu output -raw state_bucket)" >> "$GITHUB_OUTPUT"
           echo "table=$(tofu output -raw lock_table)"     >> "$GITHUB_OUTPUT"

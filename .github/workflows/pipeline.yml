@@ -92,8 +92,8 @@ jobs:
 
       # The plan job must not modify AWS resources. Bootstrap state backend
       # outputs (bucket, table, region) are persisted as GitHub secrets by
-      # the bootstrap workflow and the infra job, so the plan job reads them
-      # from secrets instead of running `tofu apply` on the bootstrap.
+      # the bootstrap workflow, so the plan job reads them from secrets
+      # instead of running `tofu apply` on the bootstrap.
       - name: Init
         working-directory: infra
         run: |
@@ -228,24 +228,18 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Bootstrap state backend
-        id: bootstrap
-        working-directory: infra/bootstrap
-        run: |
-          tofu init -input=false -reconfigure
-          tofu apply -auto-approve -input=false
-          echo "bucket=$(tofu output -raw state_bucket)"  >> "$GITHUB_OUTPUT"
-          echo "table=$(tofu output -raw lock_table)"     >> "$GITHUB_OUTPUT"
-          echo "region=$(tofu output -raw aws_region)"    >> "$GITHUB_OUTPUT"
-
+      # The state backend (S3 bucket + DynamoDB lock table) is created once by
+      # the bootstrap workflow, which persists its coordinates as TF_STATE_*
+      # secrets. Re-applying the bootstrap here would fail: it uses local
+      # state, so a fresh runner cannot know the resources already exist.
       - name: Init
         working-directory: infra
         run: |
           tofu init -input=false -reconfigure \
-            -backend-config="bucket=${{ steps.bootstrap.outputs.bucket }}" \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
             -backend-config="key=arbitrageiq-demo/terraform.tfstate" \
-            -backend-config="region=${{ steps.bootstrap.outputs.region }}" \
-            -backend-config="dynamodb_table=${{ steps.bootstrap.outputs.table }}" \
+            -backend-config="region=${{ secrets.TF_STATE_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_STATE_TABLE }}" \
             -backend-config="encrypt=true"
 
       - name: Apply
@@ -260,16 +254,6 @@ jobs:
           echo "ecs_cluster=$(tofu output -raw ecs_cluster_name)"                >> "$GITHUB_OUTPUT"
           echo "ecs_service=$(tofu output -raw ecs_service_name)"                >> "$GITHUB_OUTPUT"
           echo "task_definition_family=$(tofu output -raw task_definition_family)" >> "$GITHUB_OUTPUT"
-
-      # Persist bootstrap state backend outputs so the plan job can read
-      # them from secrets instead of running `tofu apply` on every PR.
-      - name: Sync bootstrap outputs to GitHub secrets
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          gh secret set TF_STATE_BUCKET --body "${{ steps.bootstrap.outputs.bucket }}"
-          gh secret set TF_STATE_TABLE  --body "${{ steps.bootstrap.outputs.table }}"
-          gh secret set TF_STATE_REGION --body "${{ steps.bootstrap.outputs.region }}"
 
   # ─── Build & Push ──────────────────────────────────────────────────────────
   # Builds the Docker image and pushes it to ECR. Only runs on main, after CI
