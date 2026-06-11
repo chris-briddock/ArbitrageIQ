@@ -115,9 +115,12 @@ jobs:
     permissions:
       contents: read
     steps:
+      # The default GITHUB_TOKEN cannot manage environments or write repo
+      # secrets — those permissions are not grantable via `permissions:`.
+      # GH_PAT must be a PAT with repo admin (environments) + secrets write.
       - name: Create production environment
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           # Create / update the environment.
           gh api \
@@ -199,7 +202,7 @@ jobs:
 
       - name: Sync outputs to GitHub secrets
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         working-directory: infra
         run: |
           gh secret set ECR_REPOSITORY      --body "$(tofu output -raw ecr_repository_name)"
@@ -212,7 +215,7 @@ jobs:
       # them from secrets instead of running `tofu apply` on every PR.
       - name: Sync bootstrap outputs to GitHub secrets
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           gh secret set TF_STATE_BUCKET --body "${{ steps.bootstrap.outputs.bucket }}"
           gh secret set TF_STATE_TABLE  --body "${{ steps.bootstrap.outputs.table }}"
