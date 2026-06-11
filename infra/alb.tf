@@ -11,14 +11,6 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "HTTPS"
-    protocol    = "tcp"
-    from_port   = 443
-    to_port     = 443
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
     description = "All egress"
     protocol    = "-1"
@@ -28,6 +20,18 @@ resource "aws_security_group" "alb" {
   }
 
   tags = { Name = "${var.app_name}-alb-sg" }
+}
+
+resource "aws_security_group_rule" "alb_https" {
+  count = var.certificate_arn != null ? 1 : 0
+
+  type              = "ingress"
+  description       = "HTTPS"
+  protocol          = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.alb.id
 }
 
 resource "aws_security_group" "app" {

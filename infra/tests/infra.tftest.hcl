@@ -128,7 +128,7 @@ run "target_group_health_check" {
 # ── Secrets ────────────────────────────────────────────────────────────────────
 
 run "session_secret_has_version" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_secretsmanager_secret_version.session.secret_id == aws_secretsmanager_secret.session.id
