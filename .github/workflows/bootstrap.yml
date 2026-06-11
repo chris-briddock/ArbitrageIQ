@@ -11,7 +11,8 @@ name: Bootstrap AWS OIDC
 # After this workflow succeeds:
 #   - AWS_PLAN_ROLE_ARN, AWS_DEPLOY_ROLE_ARN and AWS_REGION are set as
 #     repository secrets automatically
-#   - The infra and demo pipelines will work without any further setup
+#   - The Pipeline workflow (infra → build → deploy) will work without any
+#     further setup
 #   - The legacy single-role (if it exists) is removed
 #   - You should delete (or deactivate) the access key you used here
 #
@@ -63,6 +64,9 @@ jobs:
           echo "::add-mask::${{ inputs.aws_access_key_id }}"
           echo "::add-mask::${{ inputs.aws_secret_access_key }}"
 
+      # Needed for the state backend bootstrap (infra/bootstrap).
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
       - name: Configure temporary AWS credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
@@ -96,8 +100,8 @@ jobs:
           echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
 
       # ── Plan role (read-only + bootstrap state backend) ────────────────────
-      # Used by: infra.yml plan job (PRs only)
-      # Trust:   repo:OWNER/REPO:ref:refs/pull/* + infra.yml workflow
+      # Used by: pipeline.yml plan job (PRs only)
+      # Trust:   repo:OWNER/REPO:ref:refs/pull/* + pipeline.yml workflow
       # Policy:  ReadOnlyAccess + inline extras for bootstrap state backend
 
       - name: Create Plan role (idempotent)
@@ -118,7 +122,7 @@ jobs:
                 },
                 "StringLike": {
                   "token.actions.githubusercontent.com:sub": "repo:${{ github.repository }}:ref:refs/pull/*",
-                  "token.actions.githubusercontent.com:job_workflow_ref": "${{ github.repository }}/.github/workflows/infra.yml@*"
+                  "token.actions.githubusercontent.com:job_workflow_ref": "${{ github.repository }}/.github/workflows/pipeline.yml@*"
                 }
               }
             }]
@@ -188,8 +192,8 @@ jobs:
           echo "plan_role_arn=${PLAN_ROLE_ARN}" >> "$GITHUB_OUTPUT"
 
       # ── Deploy role (scoped write for infra + demo) ────────────────────────
-      # Used by: infra.yml apply job, demo.yml build-push + deploy (main only)
-      # Trust:   repo:OWNER/REPO:ref:refs/heads/main + infra.yml or demo.yml
+      # Used by: pipeline.yml infra, build-push and deploy jobs (main only)
+      # Trust:   repo:OWNER/REPO:ref:refs/heads/main + pipeline.yml
       # Policy:  scoped inline policy (no AdministratorAccess)
 
       - name: Create Deploy role (idempotent)
@@ -211,8 +215,7 @@ jobs:
                 },
                 "StringLike": {
                   "token.actions.githubusercontent.com:job_workflow_ref": [
-                    "${{ github.repository }}/.github/workflows/infra.yml@*",
-                    "${{ github.repository }}/.github/workflows/demo.yml@*"
+                    "${{ github.repository }}/.github/workflows/pipeline.yml@*"
                   ]
                 }
               }
@@ -505,8 +508,7 @@ jobs:
 
           ### Next steps
           1. **Delete the access key** you used to run this workflow — it is no longer needed.
-          2. Push a change to \`infra/\` on \`main\` to trigger the infrastructure pipeline.
-          3. Push a change to \`src/demo/\` on \`main\` to trigger the application pipeline.
+          2. Push to \`main\` (or re-run the Pipeline workflow) to run infra → build → deploy.
 
           All authentication uses OIDC with scoped roles — no stored credentials.
           EOF

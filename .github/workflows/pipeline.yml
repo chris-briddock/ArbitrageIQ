@@ -1,0 +1,354 @@
+name: Pipeline
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Single pipeline enforcing a strict order on main:
+#
+#   bootstrap (manual, one-time: bootstrap.yml) → infra → build → deploy
+#
+# Pull requests:  ci (lint / typecheck / test) + plan (tofu plan as PR comment)
+# Push to main:   ci ─┬─→ build-push ─→ deploy
+#                     └─ setup-env ─→ infra ─┘
+#
+# Infra outputs (ECR repo, ECS cluster/service, task family) flow to the
+# build and deploy jobs as job outputs, so the app is never deployed onto
+# infrastructure that has not been applied for the same commit.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One pipeline at a time per ref so concurrent merges cannot interleave
+# tofu applies or ECS deployments.
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TOFU_VERSION: "1.8.0"
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  # ─── CI ────────────────────────────────────────────────────────────────────
+  # Lint, type check, and unit test the app on every PR and push to main.
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: src/demo
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: src/demo/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+  # ─── Plan ──────────────────────────────────────────────────────────────────
+  # Runs on every PR. Plans against the existing state backend and posts the
+  # diff as a comment so reviewers see exactly what will change.
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      id-token: write      # OIDC token for AWS credential federation
+      pull-requests: write # post plan output as a PR comment
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # The plan job must not modify AWS resources. Bootstrap state backend
+      # outputs (bucket, table, region) are persisted as GitHub secrets by
+      # the bootstrap workflow and the infra job, so the plan job reads them
+      # from secrets instead of running `tofu apply` on the bootstrap.
+      - name: Init
+        working-directory: infra
+        run: |
+          tofu init -input=false -reconfigure \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=arbitrageiq-demo/terraform.tfstate" \
+            -backend-config="region=${{ secrets.TF_STATE_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_STATE_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      - name: Plan
+        id: plan
+        working-directory: infra
+        run: tofu plan -input=false -no-color 2>&1 | tee /tmp/plan.txt
+        continue-on-error: true
+
+      - name: Post plan as PR comment
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const fs   = require('fs')
+            const plan = fs.readFileSync('/tmp/plan.txt', 'utf8')
+            const MAX  = 65_000
+            const body = plan.length > MAX
+              ? plan.slice(0, MAX) + '\n...(truncated — see full output in the Actions log)'
+              : plan
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: context.issue.number,
+            })
+
+            const marker  = '<!-- tofu-plan -->'
+            const existing = comments.find(c => c.body.includes(marker))
+            const newBody  = `${marker}\n#### OpenTofu Plan\n\`\`\`\n${body}\n\`\`\``
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner:      context.repo.owner,
+                repo:       context.repo.repo,
+                comment_id: existing.id,
+                body:       newBody,
+              })
+            } else {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: context.issue.number,
+                body:         newBody,
+              })
+            }
+
+      - name: Fail if plan errored
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+  # ─── Setup environment ─────────────────────────────────────────────────────
+  # Creates (or updates) the `production` GitHub Environment before the infra
+  # job references it. Restricts deployments to the main branch only.
+  setup-env:
+    name: Create GitHub Environment
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    steps:
+      # The default GITHUB_TOKEN cannot manage environments or write repo
+      # secrets — those permissions are not grantable via `permissions:`.
+      # GH_PAT must be a PAT with repo admin (environments) + secrets write.
+      - name: Create production environment
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          # Create / update the environment.
+          gh api \
+            --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/environments/production" \
+            --field 'deployment_branch_policy[protected_branches]=false' \
+            --field 'deployment_branch_policy[custom_branch_policies]=true' \
+            --silent
+
+          # Add a deployment branch policy for main if one does not exist yet.
+          EXISTING=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/environments/production/deployment-branch-policies" \
+            --jq '.branch_policies[].name' 2>/dev/null || echo "")
+
+          if ! echo "$EXISTING" | grep -qx "main"; then
+            gh api \
+              --method POST \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${{ github.repository }}/environments/production/deployment-branch-policies" \
+              --field 'name=main' \
+              --field 'type=branch' \
+              --silent
+          fi
+
+  # ─── Infra ─────────────────────────────────────────────────────────────────
+  # Applies the infrastructure on every push to main (a no-op when nothing
+  # changed) and exposes the resource names the build and deploy jobs need.
+  # Add required reviewers in GitHub Settings → Environments → production
+  # to introduce a manual approval gate before the apply proceeds.
+  infra:
+    name: Infra Apply
+    runs-on: ubuntu-latest
+    needs: setup-env
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Indirection via vars keeps the VS Code Actions extension from flagging
+    # the name as unknown — the environment only exists after setup-env runs.
+    # Override with a repo variable INFRA_ENVIRONMENT if ever needed.
+    environment: ${{ vars.INFRA_ENVIRONMENT || 'production' }}
+    permissions:
+      contents: read
+      id-token: write # OIDC token for AWS credential federation
+    outputs:
+      ecr_repository: ${{ steps.infra-outputs.outputs.ecr_repository }}
+      ecs_cluster: ${{ steps.infra-outputs.outputs.ecs_cluster }}
+      ecs_service: ${{ steps.infra-outputs.outputs.ecs_service }}
+      task_definition_family: ${{ steps.infra-outputs.outputs.task_definition_family }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Bootstrap state backend
+        id: bootstrap
+        working-directory: infra/bootstrap
+        run: |
+          tofu init -input=false -reconfigure
+          tofu apply -auto-approve -input=false
+          echo "bucket=$(tofu output -raw state_bucket)"  >> "$GITHUB_OUTPUT"
+          echo "table=$(tofu output -raw lock_table)"     >> "$GITHUB_OUTPUT"
+          echo "region=$(tofu output -raw aws_region)"    >> "$GITHUB_OUTPUT"
+
+      - name: Init
+        working-directory: infra
+        run: |
+          tofu init -input=false -reconfigure \
+            -backend-config="bucket=${{ steps.bootstrap.outputs.bucket }}" \
+            -backend-config="key=arbitrageiq-demo/terraform.tfstate" \
+            -backend-config="region=${{ steps.bootstrap.outputs.region }}" \
+            -backend-config="dynamodb_table=${{ steps.bootstrap.outputs.table }}" \
+            -backend-config="encrypt=true"
+
+      - name: Apply
+        working-directory: infra
+        run: tofu apply -auto-approve -input=false
+
+      - name: Read infra outputs
+        id: infra-outputs
+        working-directory: infra
+        run: |
+          echo "ecr_repository=$(tofu output -raw ecr_repository_name)"          >> "$GITHUB_OUTPUT"
+          echo "ecs_cluster=$(tofu output -raw ecs_cluster_name)"                >> "$GITHUB_OUTPUT"
+          echo "ecs_service=$(tofu output -raw ecs_service_name)"                >> "$GITHUB_OUTPUT"
+          echo "task_definition_family=$(tofu output -raw task_definition_family)" >> "$GITHUB_OUTPUT"
+
+      # Persist bootstrap state backend outputs so the plan job can read
+      # them from secrets instead of running `tofu apply` on every PR.
+      - name: Sync bootstrap outputs to GitHub secrets
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh secret set TF_STATE_BUCKET --body "${{ steps.bootstrap.outputs.bucket }}"
+          gh secret set TF_STATE_TABLE  --body "${{ steps.bootstrap.outputs.table }}"
+          gh secret set TF_STATE_REGION --body "${{ steps.bootstrap.outputs.region }}"
+
+  # ─── Build & Push ──────────────────────────────────────────────────────────
+  # Builds the Docker image and pushes it to ECR. Only runs on main, after CI
+  # passes and the infrastructure for this commit has been applied.
+  build-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    needs: [ci, infra]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write # OIDC token for AWS credential federation
+    outputs:
+      image: ${{ steps.build-push.outputs.image }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419 # v2
+
+      - name: Build, tag, and push image to ECR
+        id: build-push
+        working-directory: src/demo
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ needs.infra.outputs.ecr_repository }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+          docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "image=$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+  # ─── Deploy ────────────────────────────────────────────────────────────────
+  # Registers a new task definition revision and updates the ECS service.
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    needs: [infra, build-push]
+    permissions:
+      contents: read
+      id-token: write # OIDC token for AWS credential federation
+    env:
+      ECS_CLUSTER: ${{ needs.infra.outputs.ecs_cluster }}
+      ECS_SERVICE: ${{ needs.infra.outputs.ecs_service }}
+      ECS_TASK_DEFINITION: ${{ needs.infra.outputs.task_definition_family }}
+      CONTAINER_NAME: web
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_DEFINITION" \
+            --query taskDefinition \
+            > task-definition.json
+
+      - name: Render updated task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@6853cfae8c3a7d978fbf68b5a55453395541dfbb # v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ needs.build-push.outputs.image }}
+
+      - name: Deploy to ECS service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@a310a830f5c14e583e35d84e4e1ec7dd177c3c9c # v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
