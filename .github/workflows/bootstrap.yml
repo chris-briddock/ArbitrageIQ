@@ -193,7 +193,9 @@ jobs:
 
       # ── Deploy role (scoped write for infra + demo) ────────────────────────
       # Used by: pipeline.yml infra, build-push and deploy jobs (main only)
-      # Trust:   repo:OWNER/REPO:ref:refs/heads/main + pipeline.yml
+      # Trust:   refs/heads/main (build/deploy) or environment:production
+      #          (infra — environment-gated jobs get an environment sub claim)
+      #          + pipeline.yml
       # Policy:  scoped inline policy (no AdministratorAccess)
 
       - name: Create Deploy role (idempotent)
@@ -210,10 +212,13 @@ jobs:
               "Action": "sts:AssumeRoleWithWebIdentity",
               "Condition": {
                 "StringEquals": {
-                  "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-                  "token.actions.githubusercontent.com:sub": "repo:${{ github.repository }}:ref:refs/heads/main"
+                  "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
                 },
                 "StringLike": {
+                  "token.actions.githubusercontent.com:sub": [
+                    "repo:${{ github.repository }}:ref:refs/heads/main",
+                    "repo:${{ github.repository }}:environment:production"
+                  ],
                   "token.actions.githubusercontent.com:job_workflow_ref": [
                     "${{ github.repository }}/.github/workflows/pipeline.yml@*"
                   ]
