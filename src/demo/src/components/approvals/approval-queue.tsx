@@ -272,8 +272,8 @@ export function ApprovalQueue() {
           <ul className="divide-y">
             {data.items.map((item) => (
               <li key={item.approval_id} className="px-4 py-4 odd:bg-muted/30">
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="min-w-44 flex-1">
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium">{item.sku_title}</p>
                     <p className="flex items-center gap-1 text-sm text-muted-foreground">
                       {item.buy_retailer}
@@ -281,22 +281,24 @@ export function ApprovalQueue() {
                       {item.sell_channel_label}
                     </p>
                   </div>
-                  <span className="w-10 rounded-md border bg-muted px-2 py-1 text-center text-sm font-medium tabular-nums">
-                    {item.quantity}
-                  </span>
-                  <span className="w-20 text-right tabular-nums">
-                    {gbp(item.buy_price_gbp)}
-                  </span>
-                  <span className="w-20 text-right tabular-nums">
-                    {gbp(item.sell_price_gbp)}
-                  </span>
-                  <span className="flex w-28 justify-center">
-                    <MarginBadge netMarginPct={item.net_margin_pct} />
-                  </span>
-                  <span className="w-20 text-right text-sm text-muted-foreground">
-                    {timeAgo(item.queued_at)}
-                  </span>
-                  <div className="flex w-64 items-center justify-center gap-2">
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                    <span className="rounded-md border bg-muted px-2 py-1 text-center text-sm font-medium tabular-nums sm:w-10">
+                      {item.quantity}
+                    </span>
+                    <span className="tabular-nums sm:w-20 sm:text-right">
+                      {gbp(item.buy_price_gbp)}
+                    </span>
+                    <span className="tabular-nums sm:w-20 sm:text-right">
+                      {gbp(item.sell_price_gbp)}
+                    </span>
+                    <span className="flex justify-center sm:w-28">
+                      <MarginBadge netMarginPct={item.net_margin_pct} />
+                    </span>
+                    <span className="text-sm text-muted-foreground sm:w-20 sm:text-right">
+                      {timeAgo(item.queued_at)}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 sm:w-64 sm:justify-center">
                     {item.status === "pending" ? (
                       <>
                         <Button
@@ -421,11 +423,11 @@ export function ApprovalQueue() {
             No executions yet today.
           </p>
         ) : (
-          <ul className="mt-2 space-y-1.5 text-sm">
+          <ul className="mt-2 space-y-2 text-sm">
             {data.execution_log.map((entry) => (
               <li
                 key={entry.id}
-                className="flex flex-wrap items-center justify-center gap-x-2 text-center"
+                className="flex flex-wrap items-center gap-x-2 gap-y-1"
               >
                 {entry.outcome === "purchased_listed" ? (
                   <CheckCircle2

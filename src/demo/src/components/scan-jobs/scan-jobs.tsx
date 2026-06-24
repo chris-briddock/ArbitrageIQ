@@ -162,7 +162,7 @@ export function ScanJobs() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3">
+      <div className="flex flex-col gap-3 rounded-lg border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">
             {data.active_count}
@@ -179,86 +179,90 @@ export function ScanJobs() {
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-lg border bg-card">
         <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/60">
-              <TableHead>Retailer</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Keywords</TableHead>
-              <TableHead className="text-right">Min Margin</TableHead>
-              <TableHead>Cadence</TableHead>
-              <TableHead>Last Run</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.jobs.map((job) => (
-              <TableRow key={job.id}>
-                <TableCell className="font-medium">{job.retailer}</TableCell>
-                <TableCell>{job.category}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {job.keywords.length > 0 ? job.keywords.join(", ") : "—"}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {pct(job.min_margin_pct)}
-                </TableCell>
-                <TableCell>{cadenceLabel(job.cadence_minutes)}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {job.last_run_at ? timeAgo(job.last_run_at) : "Never"}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className={STATUS_STYLES[job.status]}>
-                    {STATUS_LABELS[job.status]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
-                    {job.status === "paused" ? (
+            <TableHeader>
+              <TableRow className="bg-muted/60">
+                <TableHead>Retailer</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Keywords</TableHead>
+                <TableHead className="text-right">Min Margin</TableHead>
+                <TableHead>Cadence</TableHead>
+                <TableHead>Last Run</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.jobs.map((job) => (
+                <TableRow key={job.id}>
+                  <TableCell className="font-medium">{job.retailer}</TableCell>
+                  <TableCell>{job.category}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {job.keywords.length > 0 ? job.keywords.join(", ") : "—"}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {pct(job.min_margin_pct)}
+                  </TableCell>
+                  <TableCell>{cadenceLabel(job.cadence_minutes)}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {job.last_run_at ? timeAgo(job.last_run_at) : "Never"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className={STATUS_STYLES[job.status]}>
+                      {STATUS_LABELS[job.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      {job.status === "paused" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => resume.mutate(job.id)}
+                          aria-label="Resume"
+                        >
+                          <Play aria-hidden />
+                          <span className="hidden sm:inline">Resume</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => pause.mutate(job.id)}
+                          disabled={job.status === "suspended"}
+                          aria-label="Pause"
+                        >
+                          <Pause aria-hidden />
+                          <span className="hidden sm:inline">Pause</span>
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => resume.mutate(job.id)}
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => deleteJob.mutate(job.id)}
+                        aria-label={`Delete ${job.retailer} ${job.category} scan job`}
                       >
-                        <Play aria-hidden /> Resume
+                        <Trash2 aria-hidden />
                       </Button>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => pause.mutate(job.id)}
-                        disabled={job.status === "suspended"}
-                      >
-                        <Pause aria-hidden /> Pause
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => deleteJob.mutate(job.id)}
-                      aria-label={`Delete ${job.retailer} ${job.category} scan job`}
-                    >
-                      <Trash2 aria-hidden />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-            {data.jobs.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className="py-12 text-center text-muted-foreground"
-                >
-                  No scan jobs yet — create one to start monitoring a retailer
-                  category for arbitrage opportunities.
-                </TableCell>
-              </TableRow>
-            ) : null}
-          </TableBody>
-        </Table>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {data.jobs.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                    className="py-12 text-center text-muted-foreground"
+                  >
+                    No scan jobs yet — create one to start monitoring a retailer
+                    category for arbitrage opportunities.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
       </div>
 
       <p className="text-xs text-muted-foreground">

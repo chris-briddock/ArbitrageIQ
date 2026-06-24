@@ -222,7 +222,7 @@ export function UserSettingsView() {
               <Input
                 id="min-margin"
                 inputMode="numeric"
-                className="w-32"
+                className="w-24 sm:w-32"
                 value={margin}
                 onChange={(event) => { setMarginDraft(event.target.value); setMarginDirty(true); }}
               />
@@ -251,7 +251,7 @@ export function UserSettingsView() {
               <Input
                 id="spend-cap"
                 inputMode="decimal"
-                className="w-32"
+                className="w-24 sm:w-32"
                 value={spendCap}
                 onChange={(event) => { setSpendCapDraft(event.target.value); setSpendCapDirty(true); }}
               />
@@ -281,7 +281,7 @@ export function UserSettingsView() {
               <Input
                 id="quantity-cap"
                 inputMode="numeric"
-                className="w-24"
+                className="w-20 sm:w-24"
                 value={quantityCap}
                 onChange={(event) => { setQuantityCapDraft(event.target.value); setQuantityCapDirty(true); }}
               />
@@ -363,20 +363,22 @@ export function UserSettingsView() {
             {data.channels.map((channel) => (
               <li
                 key={channel.channel}
-                className="flex flex-wrap items-center gap-3 py-2.5"
+                className="flex flex-col gap-2 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3"
               >
-                <span className="w-44 font-medium">{channel.label}</span>
-                <Badge
-                  variant="secondary"
-                  className={CHANNEL_STATUS_STYLES[channel.status]}
-                >
-                  {CHANNEL_STATUS_LABELS[channel.status]}
-                </Badge>
-                <span className="flex-1 text-sm text-muted-foreground">
-                  {channel.connected_at
-                    ? `Connected ${timeAgo(channel.connected_at)}`
-                    : "—"}
-                </span>
+                <span className="font-medium sm:w-44">{channel.label}</span>
+                <div className="flex flex-wrap items-center gap-2 sm:flex-1">
+                  <Badge
+                    variant="secondary"
+                    className={CHANNEL_STATUS_STYLES[channel.status]}
+                  >
+                    {CHANNEL_STATUS_LABELS[channel.status]}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {channel.connected_at
+                      ? `Connected ${timeAgo(channel.connected_at)}`
+                      : "—"}
+                  </span>
+                </div>
                 {channel.status === "connected" ? (
                   <Button
                     variant="ghost"
@@ -459,13 +461,13 @@ export function UserSettingsView() {
                 Hold email and push alerts overnight; they appear in-app.
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {prefs.quiet_hours.enabled ? (
                 <>
                   <Input
                     type="time"
                     aria-label="Quiet hours start"
-                    className="w-28"
+                    className="w-24 sm:w-28"
                     value={prefs.quiet_hours.start}
                     onChange={(event) =>
                       updatePrefs.mutate({
@@ -481,7 +483,7 @@ export function UserSettingsView() {
                   <Input
                     type="time"
                     aria-label="Quiet hours end"
-                    className="w-28"
+                    className="w-24 sm:w-28"
                     value={prefs.quiet_hours.end}
                     onChange={(event) =>
                       updatePrefs.mutate({
