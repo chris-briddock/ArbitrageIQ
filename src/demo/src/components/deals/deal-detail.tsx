@@ -348,7 +348,7 @@ export function DealDetailView({ dealId }: { dealId: string }) {
           value={channel ?? deal.sell.channel}
           onValueChange={(value) => setChannel(value as SellChannel)}
         >
-          <SelectTrigger size="sm" className="w-48">
+          <SelectTrigger size="sm" className="w-full sm:w-48">
             <SelectValue placeholder="Sell channel" />
           </SelectTrigger>
           <SelectContent>

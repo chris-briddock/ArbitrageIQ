@@ -55,62 +55,64 @@ function SkuRow({
   onToggleWatch: (skuId: string) => void;
 }) {
   return (
-    <li className="flex flex-wrap items-center gap-4 px-4 py-3 odd:bg-muted/30">
+    <li className="flex flex-col gap-3 px-4 py-3 odd:bg-muted/30 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
       <ProductTile id={sku.id} title={sku.title} category={sku.category} />
-      <div className="min-w-44 flex-1">
+      <div className="min-w-0 flex-1">
         <p className="font-medium">{sku.title}</p>
         <p className="text-sm text-muted-foreground">{sku.category}</p>
       </div>
-      <div className="flex w-28 flex-col items-center">
-        {sku.composite_score !== null ? (
-          <>
-            <span
-              className={cn(
-                "rounded-md px-2 py-0.5 text-sm font-semibold tabular-nums",
-                scoreTone(sku.composite_score),
-              )}
-            >
-              {Math.round(sku.composite_score)} /100
-            </span>
-            <span className="mt-0.5 text-xs capitalize text-muted-foreground">
-              {sku.score_confidence}
-            </span>
-          </>
-        ) : (
-          <span className="text-xs text-muted-foreground">No score yet</span>
-        )}
-      </div>
-      <div className="flex w-24 justify-center">
-        {sku.high_opportunity ? (
-          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">HIGH OPP</Badge>
-        ) : sku.is_stale ? (
-          <Badge variant="secondary">STALE</Badge>
-        ) : sku.score_confidence === "low" ? (
-          <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">LOW CONF</Badge>
-        ) : null}
-      </div>
-      <div className="w-28 text-right text-sm">
-        <p className="font-medium tabular-nums">
-          {sku.deal_event_count_90d}
-          {sku.deal_event_count_90d >= 10 ? "+" : ""} / 90d
-        </p>
-        <p className="text-muted-foreground">
-          {pct(sku.avg_net_margin_pct)} avg
-        </p>
-      </div>
-      <div className="w-32 text-right text-sm">
-        {sku.cheapest_source ? (
-          <>
-            <p className="font-medium tabular-nums">
-              {gbp(sku.cheapest_source.price_gbp)}
-            </p>
-            <p className="text-muted-foreground">
-              ({sku.cheapest_source.retailer})
-            </p>
-          </>
-        ) : (
-          <p className="text-muted-foreground">—</p>
-        )}
+      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+        <div className="flex flex-col items-center sm:w-28">
+          {sku.composite_score !== null ? (
+            <>
+              <span
+                className={cn(
+                  "rounded-md px-2 py-0.5 text-sm font-semibold tabular-nums",
+                  scoreTone(sku.composite_score),
+                )}
+              >
+                {Math.round(sku.composite_score)} /100
+              </span>
+              <span className="mt-0.5 text-xs capitalize text-muted-foreground">
+                {sku.score_confidence}
+              </span>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">No score yet</span>
+          )}
+        </div>
+        <div className="flex justify-center sm:w-24">
+          {sku.high_opportunity ? (
+            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">HIGH OPP</Badge>
+          ) : sku.is_stale ? (
+            <Badge variant="secondary">STALE</Badge>
+          ) : sku.score_confidence === "low" ? (
+            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">LOW CONF</Badge>
+          ) : null}
+        </div>
+        <div className="text-right text-sm sm:w-28">
+          <p className="font-medium tabular-nums">
+            {sku.deal_event_count_90d}
+            {sku.deal_event_count_90d >= 10 ? "+" : ""} / 90d
+          </p>
+          <p className="text-muted-foreground">
+            {pct(sku.avg_net_margin_pct)} avg
+          </p>
+        </div>
+        <div className="text-right text-sm sm:w-32">
+          {sku.cheapest_source ? (
+            <>
+              <p className="font-medium tabular-nums">
+                {gbp(sku.cheapest_source.price_gbp)}
+              </p>
+              <p className="text-muted-foreground">
+                ({sku.cheapest_source.retailer})
+              </p>
+            </>
+          ) : (
+            <p className="text-muted-foreground">—</p>
+          )}
+        </div>
       </div>
       <div className="flex gap-2">
         {sku.live_deal_id ? (

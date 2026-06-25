@@ -44,9 +44,9 @@ export function SavedDeals() {
           {data.deals.map((deal) => (
             <li
               key={deal.deal_id}
-              className="flex flex-wrap items-center gap-4 px-4 py-3 odd:bg-muted/30"
+              className="flex flex-col gap-3 px-4 py-3 odd:bg-muted/30 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4"
             >
-              <div className="min-w-48 flex-1">
+              <div className="min-w-0 flex-1">
                 <p className="font-medium">{deal.sku.title}</p>
                 <p className="flex items-center gap-1 text-sm text-muted-foreground">
                   {deal.buy.retailer}
@@ -54,10 +54,12 @@ export function SavedDeals() {
                   {deal.sell.channel_label}
                 </p>
               </div>
-              <MarginBadge netMarginPct={deal.margin.net_margin_pct} />
-              <span className="w-24 text-right font-medium tabular-nums">
-                {gbp(deal.margin.net_profit_gbp)} net
-              </span>
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                <MarginBadge netMarginPct={deal.margin.net_margin_pct} />
+                <span className="font-medium tabular-nums sm:w-24 sm:text-right">
+                  {gbp(deal.margin.net_profit_gbp)} net
+                </span>
+              </div>
               <div className="flex gap-2">
                 <Button asChild size="sm">
                   <Link href={`/deals/${deal.deal_id}`}>Review</Link>

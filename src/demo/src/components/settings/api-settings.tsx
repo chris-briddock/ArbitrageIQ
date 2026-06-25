@@ -178,9 +178,9 @@ export function ApiSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+      <div className="flex flex-col flex-wrap items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs text-emerald-800 sm:flex-row sm:gap-x-6 sm:gap-y-1 sm:text-sm dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
         <span className="flex items-center gap-1.5">
-          <Check className="size-4" aria-hidden />
+          <Check className="size-3.5 sm:size-4" aria-hidden />
           {data.api_access === "full"
             ? "Business Plan — Full API access enabled. REST + Webhooks"
             : "Pro Plan — Read-only REST API access"}
@@ -191,7 +191,7 @@ export function ApiSettings() {
 
       <section className="space-y-3">
         <h2 className="font-semibold">API Keys</h2>
-        <div className="overflow-hidden rounded-lg border bg-card">
+        <div className="overflow-x-auto rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/60">
@@ -269,7 +269,7 @@ export function ApiSettings() {
         aria-hidden={data.api_access !== "full"}
       >
         <h2 className="font-semibold">Webhook Endpoints</h2>
-        <div className="overflow-hidden rounded-lg border bg-card">
+        <div className="overflow-x-auto rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/60">
@@ -342,7 +342,7 @@ export function ApiSettings() {
         aria-hidden={data.api_access !== "full"}
       >
         <h2 className="font-semibold">Delivery Log (last 5)</h2>
-        <div className="overflow-hidden rounded-lg border bg-card">
+        <div className="overflow-x-auto rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/60">

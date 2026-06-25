@@ -12,6 +12,7 @@ out/
 test-results/
 .qodo/
 .claude/
+.kilo/
 
 # NuGet
 *.nupkg

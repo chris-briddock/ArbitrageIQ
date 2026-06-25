@@ -73,18 +73,20 @@ function PerformancePanel({
   return (
     <div className="rounded-lg border bg-card p-4">
       <h2 className="text-center text-sm font-semibold">{title}</h2>
-      <ul className="mt-3 space-y-1.5 text-sm">
+      <ul className="mt-3 space-y-2 text-sm">
         {rows.map((row) => (
           <li
             key={row.name}
-            className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 tabular-nums"
+            className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3"
           >
-            <span className="font-medium">{row.name}:</span>
-            <span>{gbpWhole(row.profit)} profit</span>
-            <span className="text-muted-foreground">{row.deals} deals</span>
-            <span className="text-muted-foreground">
-              {pct(row.margin)} avg margin
-            </span>
+            <span className="font-medium sm:flex-1">{row.name}</span>
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+              <span className="tabular-nums">{gbpWhole(row.profit)} profit</span>
+              <span className="tabular-nums text-muted-foreground">{row.deals} deals</span>
+              <span className="tabular-nums text-muted-foreground">
+                {pct(row.margin)} avg margin
+              </span>
+            </div>
           </li>
         ))}
       </ul>
@@ -130,50 +132,56 @@ export function AnalyticsDashboardView() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3">
-        <span className="text-sm text-muted-foreground">Period:</span>
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger size="sm" className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PERIODS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span className="text-sm text-muted-foreground">Retailer:</span>
-        <Select value={retailer} onValueChange={setRetailer}>
-          <SelectTrigger size="sm" className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>All</SelectItem>
-            {RETAILERS.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span className="text-sm text-muted-foreground">Channel:</span>
-        <Select value={channel} onValueChange={setChannel}>
-          <SelectTrigger size="sm" className="w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>All</SelectItem>
-            {CHANNELS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-col flex-wrap gap-3 rounded-lg border bg-card px-4 py-3 sm:flex-row sm:items-center">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground">Period:</span>
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger size="sm" className="w-full sm:w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIODS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground">Retailer:</span>
+          <Select value={retailer} onValueChange={setRetailer}>
+            <SelectTrigger size="sm" className="w-full sm:w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All</SelectItem>
+              {RETAILERS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground">Channel:</span>
+          <Select value={channel} onValueChange={setChannel}>
+            <SelectTrigger size="sm" className="w-full sm:w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All</SelectItem>
+              {CHANNELS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         {canExport ? (
-          <div className="ml-auto flex gap-2">
+          <div className="flex flex-wrap gap-2 sm:ml-auto">
             <Button asChild variant="ghost" size="sm">
               <a href={`/api/v1/analytics/export?${queryString}`} download>
                 <Download aria-hidden /> Export CSV
@@ -193,13 +201,13 @@ export function AnalyticsDashboardView() {
             </Tooltip>
           </div>
         ) : (
-          <p className="ml-auto text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground sm:ml-auto">
             Exports are available on Pro and Business plans.
           </p>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {data ? (
           <>
             <StatCard
@@ -229,22 +237,28 @@ export function AnalyticsDashboardView() {
           Daily gross revenue with net profit overlay — hover for deal counts
         </p>
         {isPending ? (
-          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-48 w-full sm:h-64" />
         ) : (
-          <ChartContainer config={chartConfig} className="h-64 w-full">
-            <BarChart data={chartData} margin={{ left: 4, right: 4 }}>
+          <div className="h-48 sm:h-64">
+            <ChartContainer config={chartConfig} className="h-full w-full">
+              <BarChart data={chartData} margin={{ left: 4, right: 4 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
               <XAxis
                 dataKey="date"
                 tickLine={false}
                 axisLine={false}
-                minTickGap={32}
+                minTickGap={16}
+                height={45}
+                angle={-35}
+                textAnchor="end"
+                tick={{ fontSize: 10 }}
                 tickFormatter={(value: string) => shortDate(value)}
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                width={52}
+                width={44}
+                tick={{ fontSize: 10 }}
                 tickFormatter={(value: number) => `£${value.toFixed(0)}`}
               />
               <ChartTooltip
@@ -267,10 +281,11 @@ export function AnalyticsDashboardView() {
                   />
                 }
               />
-              <Bar dataKey="revenue" fill="var(--color-revenue)" radius={2} />
-              <Bar dataKey="profit" fill="var(--color-profit)" radius={2} />
-            </BarChart>
-          </ChartContainer>
+                <Bar dataKey="revenue" fill="var(--color-revenue)" radius={2} />
+                <Bar dataKey="profit" fill="var(--color-profit)" radius={2} />
+              </BarChart>
+            </ChartContainer>
+          </div>
         )}
       </div>
 
@@ -304,68 +319,68 @@ export function AnalyticsDashboardView() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-lg border bg-card">
         <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/60">
-              <TableHead>Date</TableHead>
-              <TableHead>Product</TableHead>
-              <TableHead className="text-right">Buy</TableHead>
-              <TableHead className="text-right">Sell</TableHead>
-              <TableHead>Channel</TableHead>
-              <TableHead className="text-right">Net Profit</TableHead>
-              <TableHead className="text-right">ROI %</TableHead>
-              <TableHead className="text-right">Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(data?.records ?? []).map((record) => (
-              <TableRow key={record.id}>
-                <TableCell className="text-muted-foreground">
-                  {shortDate(record.closed_at)}
-                </TableCell>
-                <TableCell className="font-medium">
-                  {record.sku_title}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {gbp(record.buy_price_gbp)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {record.sell_price_gbp ? gbp(record.sell_price_gbp) : "—"}
-                </TableCell>
-                <TableCell>{record.sell_channel_label}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {record.net_profit_gbp ? gbp(record.net_profit_gbp) : "—"}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {record.net_margin_pct ? pct(record.net_margin_pct) : "—"}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Badge
-                    variant="secondary"
-                    className={STATUS_STYLES[record.status]}
+            <TableHeader>
+              <TableRow className="bg-muted/60">
+                <TableHead>Date</TableHead>
+                <TableHead>Product</TableHead>
+                <TableHead className="text-right">Buy</TableHead>
+                <TableHead className="text-right">Sell</TableHead>
+                <TableHead>Channel</TableHead>
+                <TableHead className="text-right">Net Profit</TableHead>
+                <TableHead className="text-right">ROI %</TableHead>
+                <TableHead className="text-right">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(data?.records ?? []).map((record) => (
+                <TableRow key={record.id}>
+                  <TableCell className="text-muted-foreground">
+                    {shortDate(record.closed_at)}
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {record.sku_title}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {gbp(record.buy_price_gbp)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {gbp(record.sell_price_gbp)}
+                  </TableCell>
+                  <TableCell>{record.sell_channel_label}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {gbp(record.net_profit_gbp)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {pct(record.net_margin_pct)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Badge
+                      variant="secondary"
+                      className={STATUS_STYLES[record.status]}
+                    >
+                      {record.status === "sold"
+                        ? "Sold"
+                        : record.status === "listed"
+                          ? "Listed"
+                          : "Failed"}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {data && data.records.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                    className="py-12 text-center text-muted-foreground"
                   >
-                    {record.status === "sold"
-                      ? "Sold"
-                      : record.status === "listed"
-                        ? "Listed"
-                        : "Failed"}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            ))}
-            {data && data.records.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className="py-12 text-center text-muted-foreground"
-                >
-                  No closed deals in this period.
-                </TableCell>
-              </TableRow>
-            ) : null}
-          </TableBody>
-        </Table>
+                    No closed deals in this period.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
       </div>
     </div>
   );
