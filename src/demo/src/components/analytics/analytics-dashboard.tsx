@@ -346,14 +346,14 @@ export function AnalyticsDashboardView() {
                     {gbp(record.buy_price_gbp)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {record.sell_price_gbp ? gbp(record.sell_price_gbp) : "—"}
+                    {gbp(record.sell_price_gbp)}
                   </TableCell>
                   <TableCell>{record.sell_channel_label}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {record.net_profit_gbp ? gbp(record.net_profit_gbp) : "—"}
+                    {gbp(record.net_profit_gbp)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {record.net_margin_pct ? pct(record.net_margin_pct) : "—"}
+                    {pct(record.net_margin_pct)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Badge

@@ -65,6 +65,7 @@ export function TopNav({ email }: { email: string }) {
             type="button"
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
+            aria-controls="mobile-menu"
             onClick={() => setMenuOpen((open) => !open)}
             className="rounded-md p-1.5 text-primary-foreground/85 transition-colors hover:bg-primary-foreground/10 hover:text-primary-foreground lg:hidden"
           >
@@ -79,6 +80,7 @@ export function TopNav({ email }: { email: string }) {
 
       {/* Mobile + tablet navigation overlay */}
       <div
+        id="mobile-menu"
         className={cn(
           "fixed inset-x-0 top-14 z-40 border-b bg-primary text-primary-foreground transition-all duration-200 lg:hidden",
           menuOpen
